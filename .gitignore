@@ -1,0 +1,46 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Logs
+logs/
+*.log
+
+# SSH keys (NEVER commit private keys)
+config/ssh_host_key
+config/ssh_host_key.pub
+config/client_key
+config/client_key.pub
+config/authorized_keys
+*.pem
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated protobuf files (optional - some prefer to commit these)
+# proto/*.pb.go
+
+# Temporary files
+tmp/
+temp/

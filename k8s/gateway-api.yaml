@@ -1,0 +1,85 @@
+# Gateway API Configuration for Multi-Protocol Gateway
+# Requires Gateway API CRDs to be installed: kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gateway
+  namespace: default
+spec:
+  gatewayClassName: istio # or use your gateway class (e.g., nginx, envoy, traefik)
+  listeners:
+  # gRPC listener with TLS
+  - name: grpc
+    protocol: HTTPS
+    port: 443
+    hostname: "*.safabayar.net"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: gateway-tls-cert
+    allowedRoutes:
+      namespaces:
+        from: Same
+  # SSH listener (TCP passthrough)
+  - name: ssh
+    protocol: TCP
+    port: 22
+    allowedRoutes:
+      kinds:
+      - kind: TCPRoute
+      namespaces:
+        from: Same
+
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: gateway-grpc-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: gateway
+    sectionName: grpc
+  hostnames:
+  - "*.safabayar.net"
+  rules:
+  - matches:
+    - headers:
+      - type: Exact
+        name: content-type
+        value: application/grpc
+    backendRefs:
+    - name: gateway-grpc
+      port: 50051
+
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: gateway-ssh-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: gateway
+    sectionName: ssh
+  rules:
+  - backendRefs:
+    - name: gateway-ssh
+      port: 22
+
+---
+# TLS Certificate Secret (example - use cert-manager in production)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gateway-tls-cert
+  namespace: default
+type: kubernetes.io/tls
+data:
+  # Base64 encoded TLS certificate and key
+  # Replace with actual certificate data or use cert-manager
+  tls.crt: LS0tLS1CRUdJTi... # placeholder
+  tls.key: LS0tLS1CRUdJTi... # placeholder

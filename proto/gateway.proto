@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package gateway;
+
+option go_package = "github.com/safabayar/gateway/proto";
+
+// Gateway service for device access
+service Gateway {
+  // Execute command on device via gRPC
+  rpc ExecuteCommand(CommandRequest) returns (CommandResponse);
+
+  // Stream command execution for interactive sessions
+  rpc StreamCommand(stream CommandRequest) returns (stream CommandResponse);
+}
+
+// Request message for command execution
+message CommandRequest {
+  // FQDN of the target device (e.g., router1.myCustomer.safabayar.net)
+  string fqdn = 1;
+
+  // Username for authentication
+  string username = 2;
+
+  // Password for authentication
+  string password = 3;
+
+  // Command to execute
+  string command = 4;
+
+  // Protocol to use (ssh, telnet, netconf)
+  string protocol = 5;
+}
+
+// Response message for command execution
+message CommandResponse {
+  // Command output
+  string output = 1;
+
+  // Error message if any
+  string error = 2;
+
+  // Exit code
+  int32 exit_code = 3;
+
+  // Session ID for tracking
+  string session_id = 4;
+}
