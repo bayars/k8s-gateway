@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+  namespace: default
+data:
+  devices.yaml: |
+    # Device Routing Table - SR Linux Demo
+    # After deploying the clabernetes topology, update the hostnames with actual ClusterIP service names
+
+    devices:
+      srl1:
+        # ClusterIP service name will be: srl1-srlinux-demo or similar
+        # Update this after deploying the topology: kubectl get svc -l topology=srlinux-demo
+        hostname: "srl1-srlinux-demo.default.svc.cluster.local"
+        ssh_port: 22
+        telnet_port: 23
+        netconf_port: 830
+        description: "SR Linux Node 1"
+        location: "Demo Lab"
+
+      srl2:
+        hostname: "srl2-srlinux-demo.default.svc.cluster.local"
+        ssh_port: 22
+        telnet_port: 23
+        netconf_port: 830
+        description: "SR Linux Node 2"
+        location: "Demo Lab"
+
+    settings:
+      domain_suffix: "safabayar.net"
+      default_timeout: 30
+      max_sessions: 100
+      log_level: "info"

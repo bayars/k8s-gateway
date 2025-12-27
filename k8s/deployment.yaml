@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: default
+  labels:
+    app: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+      - name: gateway
+        image: 10.0.0.100/cks/gateway:latest
+        imagePullPolicy: Always
+        command: ["./gateway"]
+        args:
+        - "-host-key=/root/.ssh/ssh_host_key"
+        - "-authorized-keys=/root/.ssh/authorized_keys"
+        - "-config=/root/config/devices.yaml"
+        - "-log=/root/logs/gateway.log"
+        ports:
+        - name: grpc
+          containerPort: 50051
+          protocol: TCP
+        - name: ssh
+          containerPort: 2222
+          protocol: TCP
+        - name: netconf
+          containerPort: 830
+          protocol: TCP
+        env:
+        - name: LOG_LEVEL
+          value: "info"
+        volumeMounts:
+        - name: config
+          mountPath: /root/config
+          readOnly: true
+        - name: ssh-keys
+          mountPath: /root/.ssh
+          readOnly: true
+        - name: logs
+          mountPath: /root/logs
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: gateway-config
+      - name: ssh-keys
+        secret:
+          secretName: gateway-ssh-keys
+          defaultMode: 0600
+      - name: logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-grpc
+  namespace: default
+  labels:
+    app: gateway
+spec:
+  type: ClusterIP
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+    protocol: TCP
+  selector:
+    app: gateway
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-ssh
+  namespace: default
+  labels:
+    app: gateway
+spec:
+  type: LoadBalancer
+  ports:
+  - name: ssh
+    port: 22
+    targetPort: 2222
+    protocol: TCP
+  selector:
+    app: gateway
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-netconf
+  namespace: default
+  labels:
+    app: gateway
+spec:
+  type: ClusterIP
+  ports:
+  - name: netconf
+    port: 830
+    targetPort: 830
+    protocol: TCP
+  selector:
+    app: gateway

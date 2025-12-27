@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+  namespace: default
+data:
+  devices.yaml: |
+    # Device Routing Table
+    devices:
+      srl1:
+        hostname: "srl1.default.svc.cluster.local"
+        ssh_port: 22
+        telnet_port: 23
+        netconf_port: 830
+        description: "SR Linux Node 1"
+        location: "Lab"
+
+      srl2:
+        hostname: "srl2.default.svc.cluster.local"
+        ssh_port: 22
+        telnet_port: 23
+        netconf_port: 830
+        description: "SR Linux Node 2"
+        location: "Lab"
+
+    settings:
+      domain_suffix: "safabayar.net"
+      default_timeout: 30
+      max_sessions: 100
+      log_level: "info"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gateway-ssh-keys
+  namespace: default
+type: Opaque
+data:
+  # Generate SSH host key:
+  # ssh-keygen -t ed25519 -f ssh_host_key -N ""
+  # base64 -w 0 ssh_host_key
+  ssh_host_key: LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0KYjNCbGJuTnphQzFyWlhrdGRqRUFBQUFBQkc1dmJtVUFBQUFFYm05dVpRQUFBQUFBQUFBQkFBQUFNd0FBQUF0emMyZ3RaVwpReU5UVXhPUUFBQUNBWXhlSFMvaDF3VjBMeDB0MjZqS3lHazR6clZMNTlhcXhjaUc3dFpwTmMyUUFBQUppUXlTdlBrTWtyCnp3QUFBQXR6YzJndFpXUXlOVFV4T1FBQUFDQVl4ZUhTL2gxd1YwTHgwdDI2akt5R2s0enJWTDU5YXF4Y2lHN3RacE5jMlEKQUFBRUNMU2doZEgwYUtyTFRxa0JuSk5MekJoZHJLZ2txc3ZiSGx3OXlWbW40d1pSakY0ZEwrSFhCWFF2SFMzYnFNcklhVApqT3RVdm4xcXJGeUlidTFtazF6WkFBQUFFR2RoZEdWM1lYa3RhRzl6ZEMxclpYa0JBZ01FQlE9PQotLS0tLUVORCBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0K
+
+  # Generate authorized_keys:
+  # ssh-keygen -t ed25519 -f client_key -N ""
+  # base64 -w 0 client_key.pub
+  authorized_keys: c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUVMSHhlSUMxSTQ3MnJDWjdrSmZRWXdxdFV2Y1VCQ0hMejh2TWdGckFWc2ogZ2F0ZXdheS1jbGllbnQta2V5Cg==

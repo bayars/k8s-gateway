@@ -1,0 +1,43 @@
+# Device Routing Table
+# Maps device identifiers to backend connection details
+
+devices:
+  # Example: router1.myCustomer.safabayar.net
+  router1:
+    hostname: "10.0.1.10"
+    ssh_port: 22
+    telnet_port: 23
+    netconf_port: 830
+    description: "Core Router 1"
+    location: "DC-East"
+
+  router2:
+    hostname: "10.0.1.11"
+    ssh_port: 22
+    telnet_port: 23
+    netconf_port: 830
+    description: "Core Router 2"
+    location: "DC-West"
+
+  switch1:
+    hostname: "10.0.2.10"
+    ssh_port: 22
+    telnet_port: 23
+    netconf_port: 830
+    description: "Access Switch 1"
+    location: "DC-East"
+
+  firewall1:
+    hostname: "192.168.100.1"
+    ssh_port: 22
+    telnet_port: 23
+    netconf_port: 830
+    description: "Edge Firewall"
+    location: "DC-DMZ"
+
+# Global settings
+settings:
+  domain_suffix: "safabayar.net"
+  default_timeout: 30
+  max_sessions: 100
+  log_level: "info"
