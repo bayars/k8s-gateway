@@ -32,14 +32,14 @@ spec:
             type: ixrd3
             mgmt-ipv4: 172.20.20.11
             startup-config: |
-              enter candidate
-              / system management ssh admin-state enable server-ip 0.0.0.0
-              / system management netconf admin-state enable server-ip 0.0.0.0
-              / system aaa authentication admin-user admin password admin
-              / interface ethernet-1/1 admin-state enable
-              / interface ethernet-1/1 subinterface 0 admin-state enable ipv4 address 10.1.1.1/24
-              / network-instance default interface ethernet-1/1.0
-              commit stay
+              set / system grpc-server mgmt admin-state enable
+              set / system grpc-server mgmt network-instance mgmt
+              set / system grpc-server mgmt services [ gnmi gnoi gribi p4rt ]
+              set / system ssh-server mgmt admin-state enable
+              set / system netconf-server mgmt admin-state enable
+              set / interface ethernet-1/1 admin-state enable
+              set / interface ethernet-1/1 subinterface 0 admin-state enable ipv4 admin-state enable address 10.1.1.1/24
+              set / network-instance default interface ethernet-1/1.0
 
           srl2:
             kind: nokia_srlinux
@@ -47,14 +47,14 @@ spec:
             type: ixrd3
             mgmt-ipv4: 172.20.20.12
             startup-config: |
-              enter candidate
-              / system management ssh admin-state enable server-ip 0.0.0.0
-              / system management netconf admin-state enable server-ip 0.0.0.0
-              / system aaa authentication admin-user admin password admin
-              / interface ethernet-1/1 admin-state enable
-              / interface ethernet-1/1 subinterface 0 admin-state enable ipv4 address 10.1.1.2/24
-              / network-instance default interface ethernet-1/1.0
-              commit stay
+              set / system grpc-server mgmt admin-state enable
+              set / system grpc-server mgmt network-instance mgmt
+              set / system grpc-server mgmt services [ gnmi gnoi gribi p4rt ]
+              set / system ssh-server mgmt admin-state enable
+              set / system netconf-server mgmt admin-state enable
+              set / interface ethernet-1/1 admin-state enable
+              set / interface ethernet-1/1 subinterface 0 admin-state enable ipv4 admin-state enable address 10.1.1.2/24
+              set / network-instance default interface ethernet-1/1.0
 
         links:
           - endpoints: ["srl1:e1-1", "srl2:e1-1"]

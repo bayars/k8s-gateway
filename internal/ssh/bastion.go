@@ -5,9 +5,11 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/safabayar/gateway/internal/config"
 	"github.com/safabayar/gateway/internal/logger"
 	"golang.org/x/crypto/ssh"
@@ -15,23 +17,31 @@ import (
 
 // BastionServer implements SSH bastion/jump server functionality
 type BastionServer struct {
-	config        *config.Config
-	sshConfig     *ssh.ServerConfig
-	authorizedKeys map[string]ssh.PublicKey
-	listener      net.Listener
-	mu            sync.Mutex
+	config             *config.Config
+	sshConfig          *ssh.ServerConfig
+	authorizedKeys     map[string]ssh.PublicKey
+	authorizedKeysPath string
+	listener           net.Listener
+	watcher            *fsnotify.Watcher
+	mu                 sync.RWMutex
 }
 
 // NewBastionServer creates a new SSH bastion server
 func NewBastionServer(cfg *config.Config, hostKeyPath string, authorizedKeysPath string) (*BastionServer, error) {
 	bs := &BastionServer{
-		config:         cfg,
-		authorizedKeys: make(map[string]ssh.PublicKey),
+		config:             cfg,
+		authorizedKeys:     make(map[string]ssh.PublicKey),
+		authorizedKeysPath: authorizedKeysPath,
 	}
 
 	// Load authorized keys for client authentication
 	if err := bs.loadAuthorizedKeys(authorizedKeysPath); err != nil {
 		return nil, fmt.Errorf("failed to load authorized keys: %w", err)
+	}
+
+	// Start watching for authorized keys changes
+	if err := bs.watchAuthorizedKeys(); err != nil {
+		logger.Log.WithError(err).Warn("Failed to start authorized keys watcher, dynamic updates disabled")
 	}
 
 	// Configure SSH server
@@ -62,6 +72,7 @@ func (bs *BastionServer) loadAuthorizedKeys(path string) error {
 		return err
 	}
 
+	newKeys := make(map[string]ssh.PublicKey)
 	lines := strings.Split(string(data), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -69,16 +80,77 @@ func (bs *BastionServer) loadAuthorizedKeys(path string) error {
 			continue
 		}
 
-		pubKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(line))
+		pubKey, comment, _, _, err := ssh.ParseAuthorizedKey([]byte(line))
 		if err != nil {
 			logger.Log.WithError(err).Warnf("Failed to parse authorized key: %s", line)
 			continue
 		}
 
-		bs.authorizedKeys[string(pubKey.Marshal())] = pubKey
+		newKeys[string(pubKey.Marshal())] = pubKey
+		if comment != "" {
+			logger.Log.Debugf("Loaded key for: %s", comment)
+		}
 	}
 
-	logger.Log.Infof("Loaded %d authorized keys", len(bs.authorizedKeys))
+	// Thread-safe update of authorized keys
+	bs.mu.Lock()
+	bs.authorizedKeys = newKeys
+	bs.mu.Unlock()
+
+	logger.Log.Infof("Loaded %d authorized keys", len(newKeys))
+	return nil
+}
+
+// watchAuthorizedKeys starts watching the authorized keys file for changes
+func (bs *BastionServer) watchAuthorizedKeys() error {
+	if bs.authorizedKeysPath == "" {
+		return nil
+	}
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create watcher: %w", err)
+	}
+	bs.watcher = watcher
+
+	// Watch the directory containing the file (needed for ConfigMap updates in K8s)
+	dir := filepath.Dir(bs.authorizedKeysPath)
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				// Check if our file was modified (or the symlink was updated)
+				if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove) != 0 {
+					// Check if this event is for our file or the directory
+					if event.Name == bs.authorizedKeysPath ||
+						filepath.Base(event.Name) == filepath.Base(bs.authorizedKeysPath) ||
+						event.Name == dir ||
+						strings.Contains(event.Name, "..data") { // K8s ConfigMap symlink update
+						logger.Log.Info("Authorized keys file changed, reloading...")
+						if err := bs.loadAuthorizedKeys(bs.authorizedKeysPath); err != nil {
+							logger.Log.WithError(err).Error("Failed to reload authorized keys")
+						}
+					}
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				logger.Log.WithError(err).Error("Watcher error")
+			}
+		}
+	}()
+
+	// Add the directory to the watcher
+	if err := watcher.Add(dir); err != nil {
+		return fmt.Errorf("failed to watch directory %s: %w", dir, err)
+	}
+
+	logger.Log.Infof("Watching for authorized keys changes in: %s", dir)
 	return nil
 }
 
@@ -108,13 +180,20 @@ func generateHostKey(path string) (ssh.Signer, error) {
 // publicKeyCallback validates client public keys
 func (bs *BastionServer) publicKeyCallback(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 	logger.Log.WithFields(map[string]interface{}{
-		"user":      conn.User(),
-		"remote":    conn.RemoteAddr().String(),
+		"user":     conn.User(),
+		"remote":   conn.RemoteAddr().String(),
 		"key_type": key.Type(),
 	}).Debug("Public key authentication attempt")
 
+	// Thread-safe read of authorized keys
+	bs.mu.RLock()
+	keyCount := len(bs.authorizedKeys)
+	keyData := string(key.Marshal())
+	_, exists := bs.authorizedKeys[keyData]
+	bs.mu.RUnlock()
+
 	// If no authorized keys loaded, accept all (INSECURE - for development only)
-	if len(bs.authorizedKeys) == 0 {
+	if keyCount == 0 {
 		logger.Log.Warn("No authorized keys configured, accepting all connections (INSECURE)")
 		return &ssh.Permissions{
 			Extensions: map[string]string{
@@ -124,8 +203,7 @@ func (bs *BastionServer) publicKeyCallback(conn ssh.ConnMetadata, key ssh.Public
 	}
 
 	// Check if key is authorized
-	keyData := string(key.Marshal())
-	if _, exists := bs.authorizedKeys[keyData]; exists {
+	if exists {
 		logger.Log.Infof("Accepted public key for user %s", conn.User())
 		return &ssh.Permissions{
 			Extensions: map[string]string{
@@ -134,7 +212,7 @@ func (bs *BastionServer) publicKeyCallback(conn ssh.ConnMetadata, key ssh.Public
 		}, nil
 	}
 
-	logger.Log.Warnf("Rejected public key for user %s", conn.User())
+	logger.Log.Warnf("Rejected public key for user %s (fingerprint: %s)", conn.User(), ssh.FingerprintSHA256(key))
 	return nil, fmt.Errorf("unknown public key for %s", conn.User())
 }
 
@@ -759,6 +837,9 @@ func (bs *BastionServer) proxyToDeviceWithPty(clientChannel ssh.Channel, device 
 
 // Stop stops the SSH bastion server
 func (bs *BastionServer) Stop() error {
+	if bs.watcher != nil {
+		bs.watcher.Close()
+	}
 	if bs.listener != nil {
 		return bs.listener.Close()
 	}

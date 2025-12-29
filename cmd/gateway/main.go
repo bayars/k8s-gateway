@@ -9,19 +9,23 @@ import (
 	"syscall"
 
 	"github.com/safabayar/gateway/internal/config"
+	gnmiserver "github.com/safabayar/gateway/internal/gnmi"
 	grpcserver "github.com/safabayar/gateway/internal/grpc"
 	"github.com/safabayar/gateway/internal/logger"
 	sshbastion "github.com/safabayar/gateway/internal/ssh"
 	pb "github.com/safabayar/gateway/proto"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 var (
-	configPath        = flag.String("config", "config/devices.yaml", "Path to device configuration file")
-	logPath           = flag.String("log", "logs/gateway.log", "Path to log file")
-	grpcPort          = flag.Int("grpc-port", 50051, "gRPC server port")
-	sshPort           = flag.Int("ssh-port", 2222, "SSH bastion server port")
-	hostKeyPath       = flag.String("host-key", "config/ssh_host_key", "Path to SSH host key")
+	configPath         = flag.String("config", "config/devices.yaml", "Path to device configuration file")
+	logPath            = flag.String("log", "logs/gateway.log", "Path to log file")
+	grpcPort           = flag.Int("grpc-port", 50051, "gRPC server port")
+	gnmiPort           = flag.Int("gnmi-port", 57400, "gNMI server port")
+	sshPort            = flag.Int("ssh-port", 2222, "SSH bastion server port")
+	hostKeyPath        = flag.String("host-key", "config/ssh_host_key", "Path to SSH host key")
 	authorizedKeysPath = flag.String("authorized-keys", "config/authorized_keys", "Path to authorized keys file")
 )
 
@@ -45,7 +49,7 @@ func main() {
 	logger.Log.Infof("Loaded configuration for %d devices", len(cfg.Devices))
 
 	// Create channels for coordinating shutdown
-	errChan := make(chan error, 2)
+	errChan := make(chan error, 3)
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)
 
@@ -53,6 +57,13 @@ func main() {
 	go func() {
 		if err := startGRPCServer(cfg, *grpcPort); err != nil {
 			errChan <- fmt.Errorf("gRPC server error: %w", err)
+		}
+	}()
+
+	// Start gNMI proxy server
+	go func() {
+		if err := startGNMIServer(cfg, *gnmiPort); err != nil {
+			errChan <- fmt.Errorf("gNMI server error: %w", err)
 		}
 	}()
 
@@ -65,6 +76,7 @@ func main() {
 
 	logger.Log.Info("Gateway started successfully")
 	logger.Log.Infof("gRPC server listening on port %d", *grpcPort)
+	logger.Log.Infof("gNMI proxy listening on port %d", *gnmiPort)
 	logger.Log.Infof("SSH bastion listening on port %d", *sshPort)
 	logger.Log.Info("Press Ctrl+C to stop")
 
@@ -90,6 +102,9 @@ func startGRPCServer(cfg *config.Config, port int) error {
 	gatewayServer := grpcserver.NewServer(cfg)
 
 	pb.RegisterGatewayServer(grpcServer, gatewayServer)
+
+	// Enable gRPC reflection for debugging with grpcurl
+	reflection.Register(grpcServer)
 
 	logger.Log.Infof("Starting gRPC server on port %d", port)
 

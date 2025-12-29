@@ -14,6 +14,7 @@ type DeviceConfig struct {
 	SSHPort     int    `yaml:"ssh_port"`
 	TelnetPort  int    `yaml:"telnet_port"`
 	NetconfPort int    `yaml:"netconf_port"`
+	GNMIPort    int    `yaml:"gnmi_port"`
 	Description string `yaml:"description"`
 	Location    string `yaml:"location"`
 }

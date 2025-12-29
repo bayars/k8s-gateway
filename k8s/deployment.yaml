@@ -21,8 +21,8 @@ spec:
         imagePullPolicy: Always
         command: ["./gateway"]
         args:
-        - "-host-key=/root/.ssh/ssh_host_key"
-        - "-authorized-keys=/root/.ssh/authorized_keys"
+        - "-host-key=/root/.ssh/host/ssh_host_key"
+        - "-authorized-keys=/root/.ssh/keys/authorized_keys"
         - "-config=/root/config/devices.yaml"
         - "-log=/root/logs/gateway.log"
         ports:
@@ -42,8 +42,11 @@ spec:
         - name: config
           mountPath: /root/config
           readOnly: true
-        - name: ssh-keys
-          mountPath: /root/.ssh
+        - name: ssh-host-key
+          mountPath: /root/.ssh/host
+          readOnly: true
+        - name: authorized-keys
+          mountPath: /root/.ssh/keys
           readOnly: true
         - name: logs
           mountPath: /root/logs
@@ -68,10 +71,14 @@ spec:
       - name: config
         configMap:
           name: gateway-config
-      - name: ssh-keys
+      - name: ssh-host-key
         secret:
           secretName: gateway-ssh-keys
           defaultMode: 0600
+      - name: authorized-keys
+        configMap:
+          name: gateway-authorized-keys
+          defaultMode: 0644
       - name: logs
         emptyDir: {}
 ---

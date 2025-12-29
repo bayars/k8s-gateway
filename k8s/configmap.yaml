@@ -29,6 +29,25 @@ data:
       max_sessions: 100
       log_level: "info"
 ---
+# Authorized Keys ConfigMap - Edit this to add/remove SSH keys dynamically
+# The gateway watches this file and reloads keys automatically
+# Usage: kubectl edit configmap gateway-authorized-keys
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-authorized-keys
+  namespace: default
+  labels:
+    app: gateway
+data:
+  # Add one SSH public key per line
+  # Format: <key-type> <key-data> <comment>
+  # Example: ssh-ed25519 AAAAC3Nza... user@host
+  authorized_keys: |
+    # Gateway client key
+    ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIELHxeIC1I472rCZ7kJfQYwqtUvcUBCHLz8vMgFrAVsj gateway-client-key
+    # Add more keys below (one per line):
+---
 apiVersion: v1
 kind: Secret
 metadata:
@@ -40,8 +59,3 @@ data:
   # ssh-keygen -t ed25519 -f ssh_host_key -N ""
   # base64 -w 0 ssh_host_key
   ssh_host_key: LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0KYjNCbGJuTnphQzFyWlhrdGRqRUFBQUFBQkc1dmJtVUFBQUFFYm05dVpRQUFBQUFBQUFBQkFBQUFNd0FBQUF0emMyZ3RaVwpReU5UVXhPUUFBQUNBWXhlSFMvaDF3VjBMeDB0MjZqS3lHazR6clZMNTlhcXhjaUc3dFpwTmMyUUFBQUppUXlTdlBrTWtyCnp3QUFBQXR6YzJndFpXUXlOVFV4T1FBQUFDQVl4ZUhTL2gxd1YwTHgwdDI2akt5R2s0enJWTDU5YXF4Y2lHN3RacE5jMlEKQUFBRUNMU2doZEgwYUtyTFRxa0JuSk5MekJoZHJLZ2txc3ZiSGx3OXlWbW40d1pSakY0ZEwrSFhCWFF2SFMzYnFNcklhVApqT3RVdm4xcXJGeUlidTFtazF6WkFBQUFFR2RoZEdWM1lYa3RhRzl6ZEMxclpYa0JBZ01FQlE9PQotLS0tLUVORCBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0K
-
-  # Generate authorized_keys:
-  # ssh-keygen -t ed25519 -f client_key -N ""
-  # base64 -w 0 client_key.pub
-  authorized_keys: c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUVMSHhlSUMxSTQ3MnJDWjdrSmZRWXdxdFV2Y1VCQ0hMejh2TWdGckFWc2ogZ2F0ZXdheS1jbGllbnQta2V5Cg==
