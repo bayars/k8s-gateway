@@ -4,23 +4,24 @@ A multi-protocol gateway service that provides unified access to network devices
 
 ## Features
 
-- **Multi-Protocol Support**: gRPC, SSH bastion, Telnet proxy, and NETCONF proxy
-- **FQDN-Based Routing**: Route to devices using fully qualified domain names (e.g., `router1.myCustomer.safabayar.net`)
+- **Multi-Protocol Support**: gRPC, gNMI, SSH bastion, Telnet proxy, and NETCONF proxy
+- **gNMI Proxy**: Native gnmic support for SR Linux telemetry and configuration
+- **FQDN-Based Routing**: Route to devices using fully qualified domain names (e.g., `srl1.safabayar.net`)
 - **Authentication**:
   - Client → Gateway: SSH public key authentication
-  - gRPC: Username/password in request body
+  - gRPC/gNMI: Username/password in request body or metadata
   - Gateway → Device: Password-based authentication
 - **Kubernetes Native**: Designed for deployment with Kubernetes Gateway API
-- **TLS Termination**: TLS handled at Gateway API layer
 - **Comprehensive Logging**: File-based and stdout logging with structured logs
 
 ## Architecture
 
 ```
-Client → Gateway API (TLS termination) → Gateway Service → Backend Devices
-         ├─ gRPC (port 443)            ├─ SSH (port 22)
-         ├─ SSH (port 22)               ├─ Telnet (port 23)
-         └─ NETCONF (port 830)          └─ NETCONF (port 830)
+Client → Gateway Service → Backend Devices
+         ├─ gRPC  (50051)    ├─ SSH (22)
+         ├─ gNMI  (57400)    ├─ gNMI (57400)
+         ├─ SSH   (22)       ├─ Telnet (23)
+         └─ NETCONF          └─ NETCONF (830)
 ```
 
 ## Prerequisites
@@ -133,6 +134,7 @@ settings:
 - `--config`: Path to device configuration file (default: `config/devices.yaml`)
 - `--log`: Path to log file (default: `logs/gateway.log`)
 - `--grpc-port`: gRPC server port (default: `50051`)
+- `--gnmi-port`: gNMI proxy port (default: `57400`)
 - `--ssh-port`: SSH bastion port (default: `2222`)
 - `--host-key`: Path to SSH host key (default: `config/ssh_host_key`)
 - `--authorized-keys`: Path to authorized keys file (default: `config/authorized_keys`)
@@ -146,12 +148,14 @@ settings:
 ├── cmd/gateway/          # Main application
 ├── internal/
 │   ├── config/          # Configuration management
+│   ├── gnmi/            # gNMI proxy server
 │   ├── grpc/            # gRPC server implementation
 │   ├── logger/          # Logging utilities
-│   ├── proxy/           # Protocol proxy implementations
+│   ├── proxy/           # Protocol proxy implementations (SSH, Telnet, NETCONF)
 │   └── ssh/             # SSH bastion server
 ├── proto/               # Protocol buffer definitions
 ├── config/              # Configuration files
+├── demo/                # Demo environment with SR Linux
 ├── k8s/                 # Kubernetes manifests
 └── Makefile            # Build automation
 ```

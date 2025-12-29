@@ -14,6 +14,7 @@ devices:
     ssh_port: 22
     telnet_port: 23
     netconf_port: 830
+    gnmi_port: 57400
     description: "Test Router"
     location: "Test Lab"
 
@@ -65,6 +66,10 @@ settings:
 
 	if cfg.Settings.LogLevel != "debug" {
 		t.Errorf("Expected log level 'debug', got '%s'", cfg.Settings.LogLevel)
+	}
+
+	if device.GNMIPort != 57400 {
+		t.Errorf("Expected gNMI port 57400, got %d", device.GNMIPort)
 	}
 }
 

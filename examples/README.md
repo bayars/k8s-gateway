@@ -79,27 +79,33 @@ grpcurl -plaintext -d '{
 
 ## Testing Against Kubernetes Deployment
 
-### gRPC (via LoadBalancer)
-
 ```bash
 # Get the external IP
-GATEWAY_IP=$(kubectl get svc gateway-grpc -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+export GATEWAY_IP=$(kubectl get svc gateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+```
 
-# Execute command
+### gRPC
+
+```bash
 ./grpc_client \
-  -server $GATEWAY_IP:443 \
-  -fqdn router1.myCustomer.safabayar.net \
+  -server $GATEWAY_IP:50051 \
+  -fqdn srl1.safabayar.net \
   -username admin \
-  -password mypassword \
+  -password NokiaSrl1! \
   -command "show version"
 ```
 
-### SSH Bastion (via LoadBalancer)
+### SSH Bastion
 
 ```bash
-# Get the external IP
-GATEWAY_IP=$(kubectl get svc gateway-ssh -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-
-# Connect
 ssh -i ../config/client_key admin@$GATEWAY_IP
+```
+
+### gNMI
+
+```bash
+gnmic -a $GATEWAY_IP:57400 --insecure --encoding json_ietf \
+  -u admin -p NokiaSrl1! \
+  --target srl1.safabayar.net \
+  get --path /system/information
 ```

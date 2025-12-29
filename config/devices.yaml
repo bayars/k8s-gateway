@@ -2,38 +2,24 @@
 # Maps device identifiers to backend connection details
 
 devices:
-  # Example: router1.myCustomer.safabayar.net
-  router1:
-    hostname: "10.0.1.10"
+  # SR Linux devices (example)
+  srl1:
+    hostname: "srl1.default.svc.cluster.local"
     ssh_port: 22
     telnet_port: 23
     netconf_port: 830
-    description: "Core Router 1"
-    location: "DC-East"
+    gnmi_port: 57400
+    description: "SR Linux Node 1"
+    location: "Lab"
 
-  router2:
-    hostname: "10.0.1.11"
+  srl2:
+    hostname: "srl2.default.svc.cluster.local"
     ssh_port: 22
     telnet_port: 23
     netconf_port: 830
-    description: "Core Router 2"
-    location: "DC-West"
-
-  switch1:
-    hostname: "10.0.2.10"
-    ssh_port: 22
-    telnet_port: 23
-    netconf_port: 830
-    description: "Access Switch 1"
-    location: "DC-East"
-
-  firewall1:
-    hostname: "192.168.100.1"
-    ssh_port: 22
-    telnet_port: 23
-    netconf_port: 830
-    description: "Edge Firewall"
-    location: "DC-DMZ"
+    gnmi_port: 57400
+    description: "SR Linux Node 2"
+    location: "Lab"
 
 # Global settings
 settings:
