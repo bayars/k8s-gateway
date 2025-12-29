@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/safabayar/gateway/internal/config"
-	"github.com/safabayar/gateway/internal/logger"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -17,6 +15,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"github.com/safabayar/gateway/internal/config"
+	"github.com/safabayar/gateway/internal/logger"
 )
 
 // Server implements gNMI proxy server
@@ -70,7 +71,7 @@ func (s *Server) parseTarget(target string) (string, string, string, error) {
 }
 
 // getBackendClient creates a gNMI client connection to the backend device
-func (s *Server) getBackendClient(ctx context.Context, fqdn, username, password string) (gnmipb.GNMIClient, *grpc.ClientConn, error) {
+func (s *Server) getBackendClient(_ context.Context, fqdn, username, password string) (gnmipb.GNMIClient, *grpc.ClientConn, error) {
 	device, deviceName, err := s.config.GetDeviceByFQDN(fqdn)
 	if err != nil {
 		return nil, nil, fmt.Errorf("device not found: %w", err)
@@ -101,7 +102,7 @@ func (s *Server) getBackendClient(ctx context.Context, fqdn, username, password 
 		}),
 	}
 
-	conn, err := grpc.DialContext(ctx, target, opts...)
+	conn, err := grpc.NewClient(target, opts...)
 	if err != nil {
 		// Try without TLS
 		opts = []grpc.DialOption{
@@ -112,7 +113,7 @@ func (s *Server) getBackendClient(ctx context.Context, fqdn, username, password 
 				insecure: true,
 			}),
 		}
-		conn, err = grpc.DialContext(ctx, target, opts...)
+		conn, err = grpc.NewClient(target, opts...)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to connect to %s: %w", target, err)
 		}
@@ -255,7 +256,7 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
-				backendStream.CloseSend()
+				_ = backendStream.CloseSend()
 				return
 			}
 			if err != nil {

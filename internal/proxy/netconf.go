@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/safabayar/gateway/internal/logger"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/safabayar/gateway/internal/logger"
 )
 
 // ExecuteNetconfCommand executes a NETCONF RPC on a remote device
@@ -97,11 +98,11 @@ func ExecuteNetconfCommand(hostname string, port int, username, password, comman
   <close-session/>
 </rpc>]]>]]>`
 
-	stdin.Write([]byte(closeRPC))
-	stdin.Close()
+	_, _ = stdin.Write([]byte(closeRPC))
+	_ = stdin.Close()
 
 	// Wait for session to complete
-	session.Wait()
+	_ = session.Wait()
 
 	return stdout.String(), nil
 }

@@ -21,7 +21,7 @@ type DeviceConfig struct {
 
 // Settings represents global gateway settings
 type Settings struct {
-	DomainSuffix  string `yaml:"domain_suffix"`
+	DomainSuffix   string `yaml:"domain_suffix"`
 	DefaultTimeout int    `yaml:"default_timeout"`
 	MaxSessions    int    `yaml:"max_sessions"`
 	LogLevel       string `yaml:"log_level"`

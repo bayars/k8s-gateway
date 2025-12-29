@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"io"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/safabayar/gateway/internal/config"
 	"github.com/safabayar/gateway/internal/logger"
 	"github.com/safabayar/gateway/internal/proxy"
 	pb "github.com/safabayar/gateway/proto"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Server implements the Gateway gRPC service

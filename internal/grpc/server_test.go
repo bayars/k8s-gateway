@@ -31,7 +31,7 @@ func TestNewServer(t *testing.T) {
 
 	server := NewServer(cfg)
 	if server == nil {
-		t.Error("NewServer returned nil")
+		t.Fatal("NewServer returned nil")
 	}
 
 	if server.config != cfg {

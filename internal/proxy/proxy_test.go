@@ -81,9 +81,9 @@ func TestExecuteNetconfCommand_InvalidPort(t *testing.T) {
 // TestNetconfRPCWrapping tests that NETCONF commands are properly wrapped
 func TestNetconfRPCWrapping(t *testing.T) {
 	tests := []struct {
-		name     string
-		command  string
-		hasRPC   bool
+		name    string
+		command string
+		hasRPC  bool
 	}{
 		{
 			name:    "Command without RPC tag",

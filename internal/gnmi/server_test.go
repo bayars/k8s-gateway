@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/safabayar/gateway/internal/config"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/safabayar/gateway/internal/config"
 )
 
 func TestNewServer(t *testing.T) {
@@ -21,7 +22,7 @@ func TestNewServer(t *testing.T) {
 
 	server := NewServer(cfg)
 	if server == nil {
-		t.Error("NewServer returned nil")
+		t.Fatal("NewServer returned nil")
 	}
 
 	if server.config != cfg {
@@ -113,11 +114,11 @@ func TestGetTargetFromContext(t *testing.T) {
 	server := NewServer(cfg)
 
 	tests := []struct {
-		name       string
-		setupCtx   func() context.Context
-		prefix     *gnmipb.Path
-		wantFQDN   string
-		wantErr    bool
+		name     string
+		setupCtx func() context.Context
+		prefix   *gnmipb.Path
+		wantFQDN string
+		wantErr  bool
 	}{
 		{
 			name: "Target from metadata",

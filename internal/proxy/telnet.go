@@ -24,7 +24,9 @@ func ExecuteTelnetCommand(hostname string, port int, username, password, command
 	defer conn.Close()
 
 	// Set read/write deadlines
-	conn.SetDeadline(time.Now().Add(30 * time.Second))
+	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		return "", fmt.Errorf("failed to set deadline: %w", err)
+	}
 
 	// Read initial prompt
 	buf := make([]byte, 4096)
@@ -78,7 +80,7 @@ func ExecuteTelnetCommand(hostname string, port int, username, password, command
 	}
 
 	// Send exit command
-	conn.Write([]byte("exit\r\n"))
+	_, _ = conn.Write([]byte("exit\r\n"))
 
 	return output, nil
 }

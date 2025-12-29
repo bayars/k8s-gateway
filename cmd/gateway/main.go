@@ -8,15 +8,16 @@ import (
 	"os/signal"
 	"syscall"
 
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+
 	"github.com/safabayar/gateway/internal/config"
 	gnmiserver "github.com/safabayar/gateway/internal/gnmi"
 	grpcserver "github.com/safabayar/gateway/internal/grpc"
 	"github.com/safabayar/gateway/internal/logger"
 	sshbastion "github.com/safabayar/gateway/internal/ssh"
 	pb "github.com/safabayar/gateway/proto"
-	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 )
 
 var (

@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/safabayar/gateway/internal/logger"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/safabayar/gateway/internal/logger"
 )
 
 // ExecuteSSHCommand executes a command on a remote device via SSH

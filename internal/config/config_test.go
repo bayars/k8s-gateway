@@ -97,10 +97,10 @@ func TestGetDeviceByFQDN(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		fqdn        string
-		wantDevice  string
-		wantErr     bool
+		name       string
+		fqdn       string
+		wantDevice string
+		wantErr    bool
 	}{
 		{
 			name:       "Valid FQDN with subdomain",

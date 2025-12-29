@@ -10,9 +10,10 @@ import (
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
+	"golang.org/x/crypto/ssh"
+
 	"github.com/safabayar/gateway/internal/config"
 	"github.com/safabayar/gateway/internal/logger"
-	"golang.org/x/crypto/ssh"
 )
 
 // BastionServer implements SSH bastion/jump server functionality
@@ -188,8 +189,7 @@ func (bs *BastionServer) publicKeyCallback(conn ssh.ConnMetadata, key ssh.Public
 	// Thread-safe read of authorized keys
 	bs.mu.RLock()
 	keyCount := len(bs.authorizedKeys)
-	keyData := string(key.Marshal())
-	_, exists := bs.authorizedKeys[keyData]
+	_, exists := bs.authorizedKeys[string(key.Marshal())]
 	bs.mu.RUnlock()
 
 	// If no authorized keys loaded, accept all (INSECURE - for development only)
@@ -271,7 +271,7 @@ func (bs *BastionServer) handleChannel(sshConn *ssh.ServerConn, newChannel ssh.N
 	case "direct-tcpip":
 		bs.handleDirectTCPIP(sshConn, newChannel)
 	default:
-		newChannel.Reject(ssh.UnknownChannelType, fmt.Sprintf("unknown channel type: %s", newChannel.ChannelType()))
+		_ = newChannel.Reject(ssh.UnknownChannelType, fmt.Sprintf("unknown channel type: %s", newChannel.ChannelType()))
 	}
 }
 
@@ -327,10 +327,10 @@ func (bs *BastionServer) handleSession(sshConn *ssh.ServerConn, newChannel ssh.N
 				termInfo.Rows = 30
 			}
 			logger.Log.Infof("PTY size (after defaults): cols=%d, rows=%d", termInfo.Columns, termInfo.Rows)
-			req.Reply(true, nil)
+			_ = req.Reply(true, nil)
 
 		case "shell":
-			req.Reply(true, nil)
+			_ = req.Reply(true, nil)
 			// Run interactive shell with terminal info
 			bs.runInteractiveShellWithPty(channel, username, &termInfo, requests)
 			return
@@ -343,11 +343,11 @@ func (bs *BastionServer) handleSession(sshConn *ssh.ServerConn, newChannel ssh.N
 
 			// Handle the command with terminal info
 			bs.handleCommandWithPty(channel, username, command, &termInfo, requests)
-			req.Reply(true, nil)
+			_ = req.Reply(true, nil)
 			return
 
 		default:
-			req.Reply(false, nil)
+			_ = req.Reply(false, nil)
 		}
 	}
 }
@@ -359,35 +359,30 @@ func (bs *BastionServer) runInteractiveShellWithPty(channel ssh.Channel, usernam
 	bs.runInteractiveShellWithTermInfo(channel, username, termInfo, requests)
 }
 
-// runInteractiveShell provides an interactive shell for device selection (legacy without PTY)
-func (bs *BastionServer) runInteractiveShell(channel ssh.Channel, username string) {
-	bs.runInteractiveShellWithTermInfo(channel, username, nil, nil)
-}
-
 // runInteractiveShellWithTermInfo provides an interactive shell with optional PTY info
 func (bs *BastionServer) runInteractiveShellWithTermInfo(channel ssh.Channel, username string, termInfo *ptyRequestMsg, requests <-chan *ssh.Request) {
 	// Send welcome banner
-	channel.Write([]byte("\r\n"))
-	channel.Write([]byte("╔══════════════════════════════════════════════════════════════╗\r\n"))
-	channel.Write([]byte("║           Welcome to the Gateway Bastion Server              ║\r\n"))
-	channel.Write([]byte("╚══════════════════════════════════════════════════════════════╝\r\n"))
-	channel.Write([]byte("\r\n"))
-	channel.Write([]byte("Available devices:\r\n"))
+	_, _ = channel.Write([]byte("\r\n"))
+	_, _ = channel.Write([]byte("╔══════════════════════════════════════════════════════════════╗\r\n"))
+	_, _ = channel.Write([]byte("║           Welcome to the Gateway Bastion Server              ║\r\n"))
+	_, _ = channel.Write([]byte("╚══════════════════════════════════════════════════════════════╝\r\n"))
+	_, _ = channel.Write([]byte("\r\n"))
+	_, _ = channel.Write([]byte("Available devices:\r\n"))
 
 	for deviceName := range bs.config.Devices {
-		channel.Write([]byte(fmt.Sprintf("  • %s.%s\r\n", deviceName, bs.config.Settings.DomainSuffix)))
+		_, _ = channel.Write([]byte(fmt.Sprintf("  • %s.%s\r\n", deviceName, bs.config.Settings.DomainSuffix)))
 	}
 
-	channel.Write([]byte("\r\n"))
-	channel.Write([]byte("Commands:\r\n"))
-	channel.Write([]byte("  ssh <device-fqdn>  - Connect to a device\r\n"))
-	channel.Write([]byte("  list               - Show available devices\r\n"))
-	channel.Write([]byte("  exit               - Close connection\r\n"))
-	channel.Write([]byte("\r\n"))
+	_, _ = channel.Write([]byte("\r\n"))
+	_, _ = channel.Write([]byte("Commands:\r\n"))
+	_, _ = channel.Write([]byte("  ssh <device-fqdn>  - Connect to a device\r\n"))
+	_, _ = channel.Write([]byte("  list               - Show available devices\r\n"))
+	_, _ = channel.Write([]byte("  exit               - Close connection\r\n"))
+	_, _ = channel.Write([]byte("\r\n"))
 
 	// Interactive command loop
 	for {
-		channel.Write([]byte("bastion> "))
+		_, _ = channel.Write([]byte("bastion> "))
 
 		// Read command line with simple line editing
 		line, err := bs.readLine(channel)
@@ -405,15 +400,15 @@ func (bs *BastionServer) runInteractiveShellWithTermInfo(channel ssh.Channel, us
 
 		switch {
 		case command == "exit" || command == "quit":
-			channel.Write([]byte("Goodbye!\r\n"))
+			_, _ = channel.Write([]byte("Goodbye!\r\n"))
 			return
 
 		case command == "list" || command == "ls":
-			channel.Write([]byte("\r\nAvailable devices:\r\n"))
+			_, _ = channel.Write([]byte("\r\nAvailable devices:\r\n"))
 			for deviceName := range bs.config.Devices {
-				channel.Write([]byte(fmt.Sprintf("  • %s.%s\r\n", deviceName, bs.config.Settings.DomainSuffix)))
+				_, _ = channel.Write([]byte(fmt.Sprintf("  • %s.%s\r\n", deviceName, bs.config.Settings.DomainSuffix)))
 			}
-			channel.Write([]byte("\r\n"))
+			_, _ = channel.Write([]byte("\r\n"))
 
 		case strings.HasPrefix(command, "ssh "):
 			// Use PTY-aware handler if we have termInfo
@@ -423,11 +418,11 @@ func (bs *BastionServer) runInteractiveShellWithTermInfo(channel ssh.Channel, us
 				bs.handleCommand(channel, username, command)
 			}
 			// After device session ends, show prompt again
-			channel.Write([]byte("\r\n"))
+			_, _ = channel.Write([]byte("\r\n"))
 
 		default:
-			channel.Write([]byte(fmt.Sprintf("Unknown command: %s\r\n", command)))
-			channel.Write([]byte("Use 'ssh <device-fqdn>' to connect or 'exit' to quit\r\n"))
+			_, _ = channel.Write([]byte(fmt.Sprintf("Unknown command: %s\r\n", command)))
+			_, _ = channel.Write([]byte("Use 'ssh <device-fqdn>' to connect or 'exit' to quit\r\n"))
 		}
 	}
 }
@@ -450,17 +445,17 @@ func (bs *BastionServer) readLine(channel ssh.Channel) (string, error) {
 
 		switch char {
 		case '\r', '\n':
-			channel.Write([]byte("\r\n"))
+			_, _ = channel.Write([]byte("\r\n"))
 			return string(line), nil
 
 		case 127, 8: // Backspace or Delete
 			if len(line) > 0 {
 				line = line[:len(line)-1]
-				channel.Write([]byte("\b \b")) // Erase character on screen
+				_, _ = channel.Write([]byte("\b \b")) // Erase character on screen
 			}
 
 		case 3: // Ctrl+C
-			channel.Write([]byte("^C\r\n"))
+			_, _ = channel.Write([]byte("^C\r\n"))
 			return "", fmt.Errorf("interrupted")
 
 		case 4: // Ctrl+D
@@ -471,7 +466,7 @@ func (bs *BastionServer) readLine(channel ssh.Channel) (string, error) {
 		default:
 			if char >= 32 && char < 127 {
 				line = append(line, char)
-				channel.Write([]byte{char}) // Echo character
+				_, _ = channel.Write([]byte{char}) // Echo character
 			}
 		}
 	}
@@ -481,7 +476,7 @@ func (bs *BastionServer) readLine(channel ssh.Channel) (string, error) {
 func (bs *BastionServer) handleCommandWithPty(channel ssh.Channel, defaultUsername, command string, termInfo *ptyRequestMsg, requests <-chan *ssh.Request) {
 	parts := strings.Fields(command)
 	if len(parts) < 2 || parts[0] != "ssh" {
-		channel.Write([]byte("Error: Invalid command format. Use: ssh <device-fqdn>\r\n"))
+		_, _ = channel.Write([]byte("Error: Invalid command format. Use: ssh <device-fqdn>\r\n"))
 		return
 	}
 
@@ -490,17 +485,17 @@ func (bs *BastionServer) handleCommandWithPty(channel ssh.Channel, defaultUserna
 	// Get device config
 	device, deviceName, err := bs.config.GetDeviceByFQDN(targetFQDN)
 	if err != nil {
-		channel.Write([]byte(fmt.Sprintf("Error: %s\r\n", err)))
+		_, _ = channel.Write([]byte(fmt.Sprintf("Error: %s\r\n", err)))
 		return
 	}
 
-	channel.Write([]byte(fmt.Sprintf("Connecting to %s (%s)...\r\n", deviceName, device.Hostname)))
+	_, _ = channel.Write([]byte(fmt.Sprintf("Connecting to %s (%s)...\r\n", deviceName, device.Hostname)))
 
 	// Prompt for username
-	channel.Write([]byte(fmt.Sprintf("Username [%s]: ", defaultUsername)))
+	_, _ = channel.Write([]byte(fmt.Sprintf("Username [%s]: ", defaultUsername)))
 	usernameInput, err := bs.readLine(channel)
 	if err != nil {
-		channel.Write([]byte(fmt.Sprintf("Error reading username: %s\r\n", err)))
+		_, _ = channel.Write([]byte(fmt.Sprintf("Error reading username: %s\r\n", err)))
 		return
 	}
 
@@ -511,13 +506,13 @@ func (bs *BastionServer) handleCommandWithPty(channel ssh.Channel, defaultUserna
 	}
 
 	// Prompt for password
-	channel.Write([]byte("Password: "))
+	_, _ = channel.Write([]byte("Password: "))
 	password, err := bs.readPassword(channel)
 	if err != nil {
-		channel.Write([]byte(fmt.Sprintf("\r\nError reading password: %s\r\n", err)))
+		_, _ = channel.Write([]byte(fmt.Sprintf("\r\nError reading password: %s\r\n", err)))
 		return
 	}
-	channel.Write([]byte("\r\n"))
+	_, _ = channel.Write([]byte("\r\n"))
 
 	// Connect to target device with PTY info
 	logger.Log.Infof("Proxying to device with PTY: cols=%d, rows=%d, term=%s", termInfo.Columns, termInfo.Rows, termInfo.Term)
@@ -528,7 +523,7 @@ func (bs *BastionServer) handleCommandWithPty(channel ssh.Channel, defaultUserna
 func (bs *BastionServer) handleCommand(channel ssh.Channel, defaultUsername, command string) {
 	parts := strings.Fields(command)
 	if len(parts) < 2 || parts[0] != "ssh" {
-		channel.Write([]byte("Error: Invalid command format. Use: ssh <device-fqdn>\r\n"))
+		_, _ = channel.Write([]byte("Error: Invalid command format. Use: ssh <device-fqdn>\r\n"))
 		return
 	}
 
@@ -537,17 +532,17 @@ func (bs *BastionServer) handleCommand(channel ssh.Channel, defaultUsername, com
 	// Get device config
 	device, deviceName, err := bs.config.GetDeviceByFQDN(targetFQDN)
 	if err != nil {
-		channel.Write([]byte(fmt.Sprintf("Error: %s\r\n", err)))
+		_, _ = channel.Write([]byte(fmt.Sprintf("Error: %s\r\n", err)))
 		return
 	}
 
-	channel.Write([]byte(fmt.Sprintf("Connecting to %s (%s)...\r\n", deviceName, device.Hostname)))
+	_, _ = channel.Write([]byte(fmt.Sprintf("Connecting to %s (%s)...\r\n", deviceName, device.Hostname)))
 
 	// Prompt for username
-	channel.Write([]byte(fmt.Sprintf("Username [%s]: ", defaultUsername)))
+	_, _ = channel.Write([]byte(fmt.Sprintf("Username [%s]: ", defaultUsername)))
 	usernameInput, err := bs.readLine(channel)
 	if err != nil {
-		channel.Write([]byte(fmt.Sprintf("Error reading username: %s\r\n", err)))
+		_, _ = channel.Write([]byte(fmt.Sprintf("Error reading username: %s\r\n", err)))
 		return
 	}
 
@@ -558,13 +553,13 @@ func (bs *BastionServer) handleCommand(channel ssh.Channel, defaultUsername, com
 	}
 
 	// Prompt for password
-	channel.Write([]byte("Password: "))
+	_, _ = channel.Write([]byte("Password: "))
 	password, err := bs.readPassword(channel)
 	if err != nil {
-		channel.Write([]byte(fmt.Sprintf("\r\nError reading password: %s\r\n", err)))
+		_, _ = channel.Write([]byte(fmt.Sprintf("\r\nError reading password: %s\r\n", err)))
 		return
 	}
-	channel.Write([]byte("\r\n"))
+	_, _ = channel.Write([]byte("\r\n"))
 
 	// Connect to target device
 	bs.proxyToDevice(channel, device, username, password)
@@ -624,7 +619,7 @@ func (bs *BastionServer) readPassword(channel ssh.Channel) (string, error) {
 }
 
 // handleDirectTCPIP handles direct TCP/IP forwarding
-func (bs *BastionServer) handleDirectTCPIP(sshConn *ssh.ServerConn, newChannel ssh.NewChannel) {
+func (bs *BastionServer) handleDirectTCPIP(_ *ssh.ServerConn, newChannel ssh.NewChannel) {
 	// Parse direct-tcpip payload to get target address
 	var payload struct {
 		TargetAddr string
@@ -634,7 +629,7 @@ func (bs *BastionServer) handleDirectTCPIP(sshConn *ssh.ServerConn, newChannel s
 	}
 
 	if err := ssh.Unmarshal(newChannel.ExtraData(), &payload); err != nil {
-		newChannel.Reject(ssh.ConnectionFailed, "failed to parse forward data")
+		_ = newChannel.Reject(ssh.ConnectionFailed, "failed to parse forward data")
 		return
 	}
 
@@ -662,12 +657,12 @@ func (bs *BastionServer) handleDirectTCPIP(sshConn *ssh.ServerConn, newChannel s
 	wg.Add(2)
 
 	go func() {
-		io.Copy(channel, targetConn)
+		_, _ = io.Copy(channel, targetConn)
 		wg.Done()
 	}()
 
 	go func() {
-		io.Copy(targetConn, channel)
+		_, _ = io.Copy(targetConn, channel)
 		wg.Done()
 	}()
 
@@ -697,7 +692,7 @@ func (bs *BastionServer) proxyToDevice(clientChannel ssh.Channel, device *config
 	targetAddr := fmt.Sprintf("%s:%d", device.Hostname, device.SSHPort)
 	targetConn, err := ssh.Dial("tcp", targetAddr, targetConfig)
 	if err != nil {
-		clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to connect to device: %s\n", err)))
+		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to connect to device: %s\n", err)))
 		return
 	}
 	defer targetConn.Close()
@@ -705,7 +700,7 @@ func (bs *BastionServer) proxyToDevice(clientChannel ssh.Channel, device *config
 	// Create session on target
 	targetSession, err := targetConn.NewSession()
 	if err != nil {
-		clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to create session: %s\n", err)))
+		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to create session: %s\n", err)))
 		return
 	}
 	defer targetSession.Close()
@@ -723,19 +718,19 @@ func (bs *BastionServer) proxyToDevice(clientChannel ssh.Channel, device *config
 	}
 
 	if err := targetSession.RequestPty("xterm", 80, 40, modes); err != nil {
-		clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to request PTY: %s\n", err)))
+		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to request PTY: %s\n", err)))
 		return
 	}
 
 	// Start shell
 	if err := targetSession.Shell(); err != nil {
-		clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to start shell: %s\n", err)))
+		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to start shell: %s\n", err)))
 		return
 	}
 
 	// Wait for session to end
-	targetSession.Wait()
-	clientChannel.Write([]byte("\n\nConnection closed.\n"))
+	_ = targetSession.Wait()
+	_, _ = clientChannel.Write([]byte("\n\nConnection closed.\n"))
 }
 
 // proxyToDeviceWithPty establishes connection with proper PTY handling
@@ -760,7 +755,7 @@ func (bs *BastionServer) proxyToDeviceWithPty(clientChannel ssh.Channel, device 
 	targetAddr := fmt.Sprintf("%s:%d", device.Hostname, device.SSHPort)
 	targetConn, err := ssh.Dial("tcp", targetAddr, targetConfig)
 	if err != nil {
-		clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to connect to device: %s\n", err)))
+		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to connect to device: %s\n", err)))
 		return
 	}
 	defer targetConn.Close()
@@ -768,7 +763,7 @@ func (bs *BastionServer) proxyToDeviceWithPty(clientChannel ssh.Channel, device 
 	// Create session on target
 	targetSession, err := targetConn.NewSession()
 	if err != nil {
-		clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to create session: %s\n", err)))
+		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to create session: %s\n", err)))
 		return
 	}
 	defer targetSession.Close()
@@ -800,7 +795,7 @@ func (bs *BastionServer) proxyToDeviceWithPty(clientChannel ssh.Channel, device 
 	}
 
 	if err := targetSession.RequestPty(term, rows, cols, modes); err != nil {
-		clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to request PTY: %s\n", err)))
+		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to request PTY: %s\n", err)))
 		return
 	}
 
@@ -811,14 +806,14 @@ func (bs *BastionServer) proxyToDeviceWithPty(clientChannel ssh.Channel, device 
 				var winChange windowChangeMsg
 				if err := ssh.Unmarshal(req.Payload, &winChange); err == nil {
 					// Send window-change to target session
-					targetSession.WindowChange(int(winChange.Rows), int(winChange.Columns))
+					_ = targetSession.WindowChange(int(winChange.Rows), int(winChange.Columns))
 				}
 				if req.WantReply {
-					req.Reply(true, nil)
+					_ = req.Reply(true, nil)
 				}
 			} else {
 				if req.WantReply {
-					req.Reply(false, nil)
+					_ = req.Reply(false, nil)
 				}
 			}
 		}
@@ -826,13 +821,13 @@ func (bs *BastionServer) proxyToDeviceWithPty(clientChannel ssh.Channel, device 
 
 	// Start shell
 	if err := targetSession.Shell(); err != nil {
-		clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to start shell: %s\n", err)))
+		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to start shell: %s\n", err)))
 		return
 	}
 
 	// Wait for session to end
-	targetSession.Wait()
-	clientChannel.Write([]byte("\n\nConnection closed.\n"))
+	_ = targetSession.Wait()
+	_, _ = clientChannel.Write([]byte("\n\nConnection closed.\n"))
 }
 
 // Stop stops the SSH bastion server
