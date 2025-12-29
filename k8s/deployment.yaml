@@ -29,6 +29,9 @@ spec:
         - name: grpc
           containerPort: 50051
           protocol: TCP
+        - name: gnmi
+          containerPort: 57400
+          protocol: TCP
         - name: ssh
           containerPort: 2222
           protocol: TCP
@@ -112,6 +115,23 @@ spec:
   - name: ssh
     port: 22
     targetPort: 2222
+    protocol: TCP
+  selector:
+    app: gateway
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-gnmi
+  namespace: default
+  labels:
+    app: gateway
+spec:
+  type: ClusterIP
+  ports:
+  - name: gnmi
+    port: 57400
+    targetPort: 57400
     protocol: TCP
   selector:
     app: gateway

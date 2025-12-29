@@ -35,6 +35,8 @@ RUN mkdir -p /root/logs
 # Expose ports
 # gRPC
 EXPOSE 50051
+# gNMI
+EXPOSE 57400
 # SSH
 EXPOSE 2222
 # NETCONF (if needed for direct access)

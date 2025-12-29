@@ -129,3 +129,26 @@ func startSSHBastion(cfg *config.Config, port int, hostKeyPath, authorizedKeysPa
 
 	return nil
 }
+
+func startGNMIServer(cfg *config.Config, port int) error {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return fmt.Errorf("failed to listen on port %d: %w", port, err)
+	}
+
+	grpcServer := grpc.NewServer()
+	gnmiServer := gnmiserver.NewServer(cfg)
+
+	gnmipb.RegisterGNMIServer(grpcServer, gnmiServer)
+
+	// Enable gRPC reflection for debugging with grpcurl
+	reflection.Register(grpcServer)
+
+	logger.Log.Infof("Starting gNMI proxy server on port %d", port)
+
+	if err := grpcServer.Serve(listener); err != nil {
+		return fmt.Errorf("failed to serve gNMI: %w", err)
+	}
+
+	return nil
+}

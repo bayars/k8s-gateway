@@ -12,6 +12,7 @@ data:
         ssh_port: 22
         telnet_port: 23
         netconf_port: 830
+        gnmi_port: 57400
         description: "SR Linux Node 1"
         location: "Lab"
 
@@ -20,6 +21,7 @@ data:
         ssh_port: 22
         telnet_port: 23
         netconf_port: 830
+        gnmi_port: 57400
         description: "SR Linux Node 2"
         location: "Lab"
 
