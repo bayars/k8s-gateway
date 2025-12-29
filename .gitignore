@@ -14,6 +14,8 @@ bin/
 # Go workspace file
 go.work
 
+CLAUDE.md
+
 # Logs
 logs/
 *.log
