@@ -1,0 +1,230 @@
+# Gateway Helm Chart Values
+# All configuration options for the multi-protocol gateway
+
+# Number of replicas
+replicaCount: 2
+
+# Container image configuration
+image:
+  repository: ghcr.io/safabayar/gateway
+  tag: "latest"
+  pullPolicy: Always
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+# - name: my-registry-secret
+
+# Override names
+nameOverride: ""
+fullnameOverride: ""
+
+# Service account configuration
+serviceAccount:
+  # Create a service account
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # Name of the service account (auto-generated if not set)
+  name: ""
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod security context
+podSecurityContext: {}
+  # fsGroup: 2000
+
+# Container security context
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+# Gateway server configuration
+gateway:
+  # Log level: debug, info, warn, error
+  logLevel: "info"
+
+  # gRPC server port
+  grpcPort: 50051
+
+  # gNMI server port
+  gnmiPort: 57400
+
+  # SSH bastion port
+  sshPort: 2222
+
+  # NETCONF port
+  netconfPort: 830
+
+# Device configuration
+devices:
+  # Domain suffix for FQDNs
+  domainSuffix: "safabayar.net"
+
+  # Default timeout for operations
+  defaultTimeout: 30
+
+  # Maximum concurrent sessions
+  maxSessions: 100
+
+  # Device entries (key = device name extracted from FQDN)
+  entries: {}
+  # Example:
+  #   srl1:
+  #     hostname: "srl1.default.svc.cluster.local"
+  #     sshPort: 22
+  #     telnetPort: 23
+  #     netconfPort: 830
+  #     gnmiPort: 57400
+  #     description: "SR Linux Node 1"
+  #     location: "Lab"
+
+# SSH configuration
+ssh:
+  # SSH host key (base64 encoded)
+  # Generate: ssh-keygen -t ed25519 -f ssh_host_key -N "" && base64 -w 0 ssh_host_key
+  hostKey: ""
+
+  # Use existing secret for SSH host key
+  existingHostKeySecret: ""
+
+  # Key name in the existing secret
+  hostKeySecretKey: "ssh_host_key"
+
+  # Authorized keys for client authentication (list of public keys)
+  authorizedKeys: []
+  # - "ssh-ed25519 AAAAC3Nza... user@host"
+
+  # Use existing ConfigMap for authorized keys
+  existingAuthorizedKeysConfigMap: ""
+
+# Single service exposing all ports
+service:
+  # Service type: ClusterIP, NodePort, LoadBalancer
+  type: LoadBalancer
+
+  # LoadBalancer IP (optional, for static IP assignment)
+  loadBalancerIP: ""
+
+  # Service annotations
+  annotations: {}
+  # For cloud providers:
+  # annotations:
+  #   service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  #   metallb.universe.tf/loadBalancerIPs: 10.0.0.50
+
+  # gRPC port configuration
+  grpc:
+    enabled: true
+    port: 50051
+
+  # gNMI port configuration
+  gnmi:
+    enabled: true
+    port: 57400
+
+  # SSH port configuration
+  ssh:
+    enabled: true
+    port: 22
+
+  # NETCONF port configuration
+  netconf:
+    enabled: true
+    port: 830
+
+# Gateway API configuration (optional)
+gatewayAPI:
+  enabled: false
+
+  # Gateway class name (istio, nginx, envoy, traefik, etc.)
+  gatewayClassName: "istio"
+
+  # Hostname pattern for routing
+  hostname: "*.safabayar.net"
+
+  # TLS configuration
+  tls:
+    enabled: true
+    # Use existing secret for TLS certificate
+    existingSecret: ""
+    # Or provide certificate data (base64 encoded)
+    certificate: ""
+    privateKey: ""
+
+  # gRPC route configuration
+  grpcRoute:
+    enabled: true
+
+  # SSH TCP route configuration
+  sshRoute:
+    enabled: true
+
+# Resource limits and requests
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "250m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+# Autoscaling configuration
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity: {}
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# Probes configuration
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  readiness:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
+
+# Extra environment variables
+extraEnv: []
+# - name: MY_VAR
+#   value: "my-value"
+
+# Extra volume mounts
+extraVolumeMounts: []
+# - name: extra-config
+#   mountPath: /etc/extra
+
+# Extra volumes
+extraVolumes: []
+# - name: extra-config
+#   configMap:
+#     name: my-extra-config

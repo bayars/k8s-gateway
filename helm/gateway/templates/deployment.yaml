@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gateway.fullname" . }}
+  labels:
+    {{- include "gateway.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/authorized-keys: {{ include (print $.Template.BasePath "/configmap-authorized-keys.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "gateway.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "gateway.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["./gateway"]
+          args:
+            - "-host-key=/root/.ssh/host/{{ .Values.ssh.hostKeySecretKey }}"
+            - "-authorized-keys=/root/.ssh/keys/authorized_keys"
+            - "-config=/root/config/devices.yaml"
+            - "-log=/root/logs/gateway.log"
+            - "-grpc-port={{ .Values.gateway.grpcPort }}"
+            - "-gnmi-port={{ .Values.gateway.gnmiPort }}"
+            - "-ssh-port={{ .Values.gateway.sshPort }}"
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.gateway.grpcPort }}
+              protocol: TCP
+            - name: gnmi
+              containerPort: {{ .Values.gateway.gnmiPort }}
+              protocol: TCP
+            - name: ssh
+              containerPort: {{ .Values.gateway.sshPort }}
+              protocol: TCP
+            - name: netconf
+              containerPort: {{ .Values.gateway.netconfPort }}
+              protocol: TCP
+          env:
+            - name: LOG_LEVEL
+              value: {{ .Values.gateway.logLevel | quote }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /root/config
+              readOnly: true
+            - name: ssh-host-key
+              mountPath: /root/.ssh/host
+              readOnly: true
+            - name: authorized-keys
+              mountPath: /root/.ssh/keys
+              readOnly: true
+            - name: logs
+              mountPath: /root/logs
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.probes.liveness.enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.gateway.grpcPort }}
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+            successThreshold: {{ .Values.probes.liveness.successThreshold }}
+          {{- end }}
+          {{- if .Values.probes.readiness.enabled }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.gateway.grpcPort }}
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+            successThreshold: {{ .Values.probes.readiness.successThreshold }}
+          {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "gateway.configMapName" . }}
+        - name: ssh-host-key
+          secret:
+            secretName: {{ include "gateway.sshHostKeySecretName" . }}
+            defaultMode: 0600
+        - name: authorized-keys
+          configMap:
+            name: {{ include "gateway.authorizedKeysConfigMapName" . }}
+            defaultMode: 0644
+        - name: logs
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

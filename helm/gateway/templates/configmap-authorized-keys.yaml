@@ -1,0 +1,20 @@
+{{- if not .Values.ssh.existingAuthorizedKeysConfigMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gateway.authorizedKeysConfigMapName" . }}
+  labels:
+    {{- include "gateway.labels" . | nindent 4 }}
+data:
+  # SSH authorized keys for client authentication
+  # Add/remove keys by upgrading the Helm release
+  authorized_keys: |
+    # Gateway authorized keys - managed by Helm
+    {{- range .Values.ssh.authorizedKeys }}
+    {{ . }}
+    {{- end }}
+    {{- if not .Values.ssh.authorizedKeys }}
+    # No authorized keys configured - gateway will accept all connections (INSECURE)
+    # Add keys via: --set ssh.authorizedKeys[0]="ssh-ed25519 AAAA..."
+    {{- end }}
+{{- end }}

@@ -1,0 +1,104 @@
+{{- if .Values.gatewayAPI.enabled }}
+# Gateway API Configuration
+# Requires Gateway API CRDs: kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ include "gateway.fullname" . }}
+  labels:
+    {{- include "gateway.labels" . | nindent 4 }}
+spec:
+  gatewayClassName: {{ .Values.gatewayAPI.gatewayClassName }}
+  listeners:
+    {{- if .Values.gatewayAPI.tls.enabled }}
+    # gRPC listener with TLS
+    - name: grpc
+      protocol: HTTPS
+      port: 443
+      hostname: {{ .Values.gatewayAPI.hostname | quote }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ include "gateway.tlsSecretName" . }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- else }}
+    # gRPC listener without TLS
+    - name: grpc
+      protocol: HTTP
+      port: 80
+      hostname: {{ .Values.gatewayAPI.hostname | quote }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+    {{- if .Values.gatewayAPI.sshRoute.enabled }}
+    # SSH listener (TCP passthrough)
+    - name: ssh
+      protocol: TCP
+      port: 22
+      allowedRoutes:
+        kinds:
+          - kind: TCPRoute
+        namespaces:
+          from: Same
+    {{- end }}
+---
+{{- if .Values.gatewayAPI.grpcRoute.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "gateway.fullname" . }}-grpc
+  labels:
+    {{- include "gateway.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ include "gateway.fullname" . }}
+      sectionName: grpc
+  hostnames:
+    - {{ .Values.gatewayAPI.hostname | quote }}
+  rules:
+    - matches:
+        - headers:
+            - type: Exact
+              name: content-type
+              value: application/grpc
+      backendRefs:
+        - name: {{ include "gateway.fullname" . }}-grpc
+          port: {{ .Values.services.grpc.port }}
+{{- end }}
+---
+{{- if .Values.gatewayAPI.sshRoute.enabled }}
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: {{ include "gateway.fullname" . }}-ssh
+  labels:
+    {{- include "gateway.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ include "gateway.fullname" . }}
+      sectionName: ssh
+  rules:
+    - backendRefs:
+        - name: {{ include "gateway.fullname" . }}-ssh
+          port: {{ .Values.services.ssh.port }}
+{{- end }}
+---
+{{- if and .Values.gatewayAPI.tls.enabled (not .Values.gatewayAPI.tls.existingSecret) .Values.gatewayAPI.tls.certificate .Values.gatewayAPI.tls.privateKey }}
+# TLS Certificate Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "gateway.tlsSecretName" . }}
+  labels:
+    {{- include "gateway.labels" . | nindent 4 }}
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ .Values.gatewayAPI.tls.certificate }}
+  tls.key: {{ .Values.gatewayAPI.tls.privateKey }}
+{{- end }}
+{{- end }}

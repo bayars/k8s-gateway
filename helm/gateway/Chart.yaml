@@ -1,0 +1,18 @@
+apiVersion: v2
+name: gateway
+description: Multi-protocol gateway for network device access (gRPC, SSH, gNMI, NETCONF)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - gateway
+  - network
+  - ssh
+  - grpc
+  - gnmi
+  - netconf
+  - bastion
+home: https://github.com/safabayar/gateway
+maintainers:
+  - name: safabayar
+    email: safa@safabayar.net

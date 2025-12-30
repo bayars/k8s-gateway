@@ -1,0 +1,97 @@
+
+=============================================================
+  Multi-Protocol Gateway has been deployed!
+=============================================================
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+Service: {{ include "gateway.fullname" . }}
+Type: {{ .Values.service.type }}
+Ports:
+{{- if .Values.service.grpc.enabled }}
+  - gRPC:    {{ .Values.service.grpc.port }}
+{{- end }}
+{{- if .Values.service.gnmi.enabled }}
+  - gNMI:    {{ .Values.service.gnmi.port }}
+{{- end }}
+{{- if .Values.service.ssh.enabled }}
+  - SSH:     {{ .Values.service.ssh.port }}
+{{- end }}
+{{- if .Values.service.netconf.enabled }}
+  - NETCONF: {{ .Values.service.netconf.port }}
+{{- end }}
+
+{{- if eq .Values.service.type "LoadBalancer" }}
+
+To get the Gateway LoadBalancer IP:
+  export GATEWAY_IP=$(kubectl get svc {{ include "gateway.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  echo $GATEWAY_IP
+{{- end }}
+
+=============================================================
+  Quick Start Guide
+=============================================================
+
+{{- if eq .Values.service.type "LoadBalancer" }}
+1. Get the Gateway IP:
+   export GATEWAY_IP=$(kubectl get svc {{ include "gateway.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+2. SSH Bastion Access:
+   ssh -i <your-private-key> -p {{ .Values.service.ssh.port }} user@$GATEWAY_IP
+
+3. gRPC Access:
+   grpcurl -plaintext -d '{
+     "fqdn": "device1.{{ .Values.devices.domainSuffix }}",
+     "username": "admin",
+     "password": "password",
+     "command": "show version",
+     "protocol": "ssh"
+   }' $GATEWAY_IP:{{ .Values.service.grpc.port }} gateway.Gateway/ExecuteCommand
+
+4. gNMI Access:
+   gnmic -a $GATEWAY_IP:{{ .Values.service.gnmi.port }} --insecure \
+     --metadata "x-gnmi-target=device1.{{ .Values.devices.domainSuffix }}:admin:password" \
+     capabilities
+{{- else }}
+1. Port forward to access services:
+   kubectl port-forward svc/{{ include "gateway.fullname" . }} {{ .Values.service.ssh.port }}:{{ .Values.service.ssh.port }} {{ .Values.service.grpc.port }}:{{ .Values.service.grpc.port }} {{ .Values.service.gnmi.port }}:{{ .Values.service.gnmi.port }} -n {{ .Release.Namespace }}
+
+2. SSH Bastion Access:
+   ssh -i <your-private-key> -p {{ .Values.service.ssh.port }} user@localhost
+
+3. gRPC/gNMI Access:
+   Use localhost with the respective ports
+{{- end }}
+
+=============================================================
+  Configuration
+=============================================================
+
+Configured Devices:
+{{- if .Values.devices.entries }}
+{{- range $name, $device := .Values.devices.entries }}
+  - {{ $name }}.{{ $.Values.devices.domainSuffix }} -> {{ $device.hostname }}
+{{- end }}
+{{- else }}
+  No devices configured. Add devices via values.yaml or --set
+{{- end }}
+
+To add/update devices:
+  helm upgrade {{ .Release.Name }} {{ .Chart.Name }} --set devices.entries.newdevice.hostname=10.0.0.1
+
+To update authorized SSH keys:
+  helm upgrade {{ .Release.Name }} {{ .Chart.Name }} --set ssh.authorizedKeys[0]="ssh-ed25519 AAAA..."
+
+=============================================================
+  Troubleshooting
+=============================================================
+
+View logs:
+  kubectl logs -f deployment/{{ include "gateway.fullname" . }} -n {{ .Release.Namespace }}
+
+Check pod status:
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }} -n {{ .Release.Namespace }}
+
+Describe deployment:
+  kubectl describe deployment {{ include "gateway.fullname" . }} -n {{ .Release.Namespace }}
