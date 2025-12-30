@@ -17,12 +17,73 @@ A multi-protocol gateway service that provides unified access to network devices
 ## Architecture
 
 ```
-Client → Gateway Service → Backend Devices
-         ├─ gRPC  (50051)    ├─ SSH (22)
-         ├─ gNMI  (57400)    ├─ gNMI (57400)
-         ├─ SSH   (22)       ├─ Telnet (23)
-         └─ NETCONF          └─ NETCONF (830)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                   CLIENTS                                        │
+├──────────────────┬──────────────────┬──────────────────┬────────────────────────┤
+│   SSH Client     │   gRPC Client    │   gNMI Client    │   NETCONF Client       │
+│   (openssh)      │   (grpcurl)      │   (gnmic)        │   (ncclient)           │
+└────────┬─────────┴────────┬─────────┴────────┬─────────┴───────────┬────────────┘
+         │                  │                  │                     │
+         │ :22              │ :50051           │ :57400              │ :830
+         │ SSH Key Auth     │ plaintext        │ insecure            │
+         ▼                  ▼                  ▼                     ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            GATEWAY SERVICE                                       │
+│                         (Single LoadBalancer IP)                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐    │
+│  │                        FQDN-Based Router                                 │    │
+│  │         srl1.safabayar.net  ──►  Extract device name: "srl1"            │    │
+│  │         router1.lab.net     ──►  Extract device name: "router1"         │    │
+│  └─────────────────────────────────────────────────────────────────────────┘    │
+│                                      │                                           │
+│         ┌────────────────────────────┼────────────────────────────┐             │
+│         ▼                            ▼                            ▼             │
+│  ┌─────────────┐           ┌─────────────────┐           ┌─────────────┐        │
+│  │ SSH Bastion │           │   gRPC Server   │           │ gNMI Proxy  │        │
+│  │   Server    │           │                 │           │   Server    │        │
+│  │             │           │  ┌───────────┐  │           │             │        │
+│  │ Public Key  │           │  │SSH Proxy  │  │           │ x-gnmi-     │        │
+│  │ Auth        │           │  │Telnet Prxy│  │           │ target      │        │
+│  │             │           │  │NETCONF Prx│  │           │ header      │        │
+│  └──────┬──────┘           │  └───────────┘  │           └──────┬──────┘        │
+│         │                  └────────┬────────┘                  │               │
+│         │                           │                           │               │
+│  ┌──────┴───────────────────────────┴───────────────────────────┴──────┐        │
+│  │                      Device Config Lookup                            │        │
+│  │                       (devices.yaml)                                 │        │
+│  │  ┌─────────────────────────────────────────────────────────────┐    │        │
+│  │  │ srl1:                    │ srl2:                            │    │        │
+│  │  │   hostname: 10.0.0.1     │   hostname: 10.0.0.2             │    │        │
+│  │  │   ssh_port: 22           │   ssh_port: 22                   │    │        │
+│  │  │   gnmi_port: 57400       │   gnmi_port: 57400               │    │        │
+│  │  └─────────────────────────────────────────────────────────────┘    │        │
+│  └─────────────────────────────────────────────────────────────────────┘        │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       │ Password Auth
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            BACKEND NETWORK DEVICES                               │
+│                                                                                  │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐           │
+│  │    SR Linux 1    │    │    SR Linux 2    │    │   Other Device   │           │
+│  │   (10.0.0.1)     │    │   (10.0.0.2)     │    │   (10.0.0.x)     │           │
+│  │                  │    │                  │    │                  │           │
+│  │  SSH    :22      │    │  SSH    :22      │    │  SSH    :22      │           │
+│  │  gNMI   :57400   │    │  gNMI   :57400   │    │  Telnet :23      │           │
+│  │  NETCONF:830     │    │  NETCONF:830     │    │  NETCONF:830     │           │
+│  └──────────────────┘    └──────────────────┘    └──────────────────┘           │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Protocol Flow
+
+| Protocol | Client → Gateway | Gateway → Device | Use Case |
+|----------|------------------|------------------|----------|
+| **SSH** | Public key auth on port 22 | Password auth | Interactive shell, commands |
+| **gRPC** | Plaintext on port 50051 | SSH/Telnet/NETCONF | API-driven automation |
+| **gNMI** | Insecure on port 57400 | gNMI with TLS | Telemetry, config management |
+| **NETCONF** | Via gRPC | SSH subsystem | XML-based config |
 
 ## Prerequisites
 
@@ -65,12 +126,44 @@ make run
 
 ### 4. Deploy to Kubernetes
 
+#### Option A: Using Helm (Recommended)
+
+```bash
+# Install from OCI registry
+helm install gateway oci://ghcr.io/safabayar/charts/gateway
+
+# Or with custom values
+helm install gateway oci://ghcr.io/safabayar/charts/gateway \
+  --set devices.entries.srl1.hostname=10.0.0.1 \
+  --set service.type=LoadBalancer
+```
+
+#### Option B: Using Raw Manifests
+
 ```bash
 # Build Docker image
 make docker-build
 
 # Deploy to Kubernetes
 make k8s-deploy
+```
+
+### 5. Access the Gateway
+
+```bash
+# Get the LoadBalancer IP
+export GATEWAY_IP=$(kubectl get svc gateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+# Test SSH
+ssh -i config/client_key -p 22 user@$GATEWAY_IP
+
+# Test gRPC
+grpcurl -plaintext $GATEWAY_IP:50051 list
+
+# Test gNMI
+gnmic -a $GATEWAY_IP:57400 --insecure \
+  --metadata "x-gnmi-target=srl1.safabayar.net:admin:password" \
+  capabilities
 ```
 
 ## Usage
@@ -145,19 +238,22 @@ settings:
 
 ```
 .
-├── cmd/gateway/          # Main application
+├── cmd/gateway/          # Main application entry point
 ├── internal/
 │   ├── config/          # Configuration management
 │   ├── gnmi/            # gNMI proxy server
 │   ├── grpc/            # gRPC server implementation
 │   ├── logger/          # Logging utilities
-│   ├── proxy/           # Protocol proxy implementations (SSH, Telnet, NETCONF)
+│   ├── proxy/           # Protocol proxies (SSH, Telnet, NETCONF)
 │   └── ssh/             # SSH bastion server
 ├── proto/               # Protocol buffer definitions
-├── config/              # Configuration files
-├── demo/                # Demo environment with SR Linux
-├── k8s/                 # Kubernetes manifests
-└── Makefile            # Build automation
+├── config/              # Configuration files (devices.yaml, keys)
+├── helm/gateway/        # Helm chart for Kubernetes deployment
+├── demo/                # Demo environments
+│   ├── helm-demo/       # Helm chart demo with SR Linux
+│   └── ssh-keys/        # Demo SSH keys
+├── k8s/                 # Raw Kubernetes manifests
+└── Makefile             # Build automation
 ```
 
 ### Build Commands
