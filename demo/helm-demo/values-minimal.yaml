@@ -1,0 +1,41 @@
+# Minimal Helm values - uses defaults for most settings
+# Usage: helm install gateway ../helm/gateway -f values-minimal.yaml
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/safabayar/gateway
+  tag: "latest"
+
+# Single device for testing
+devices:
+  domainSuffix: "example.com"
+  entries:
+    router1:
+      hostname: "192.168.1.1"
+      sshPort: 22
+      gnmiPort: 57400
+
+# SSH host key (required)
+ssh:
+  hostKey: ""  # Add your base64-encoded host key here
+
+# Single service with ClusterIP (use port-forward for access)
+service:
+  type: ClusterIP
+
+  grpc:
+    enabled: true
+    port: 50051
+
+  gnmi:
+    enabled: true
+    port: 57400
+
+  ssh:
+    enabled: true
+    port: 22
+
+  netconf:
+    enabled: true
+    port: 830

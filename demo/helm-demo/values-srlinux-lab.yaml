@@ -1,0 +1,90 @@
+# Helm values for SR Linux Lab Demo
+# Usage: helm install gateway ../helm/gateway -f values-srlinux-lab.yaml
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/safabayar/gateway
+  tag: "latest"
+  pullPolicy: Always
+
+gateway:
+  logLevel: "debug"
+
+# Device configuration for SR Linux nodes
+devices:
+  domainSuffix: "safabayar.net"
+  defaultTimeout: 30
+  maxSessions: 100
+  entries:
+    srl1:
+      hostname: "srl1.default.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "SR Linux Node 1"
+      location: "Lab"
+    srl2:
+      hostname: "srl2.default.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "SR Linux Node 2"
+      location: "Lab"
+
+# SSH configuration
+ssh:
+  # Base64 encoded SSH host key
+  # Generate: ssh-keygen -t ed25519 -f ssh_host_key -N "" && base64 -w 0 ssh_host_key
+  hostKey: "LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0KYjNCbGJuTnphQzFyWlhrdGRqRUFBQUFBQkc1dmJtVUFBQUFFYm05dVpRQUFBQUFBQUFBQkFBQUFNd0FBQUF0emMyZ3RaVwpReU5UVXhPUUFBQUNBWXhlSFMvaDF3VjBMeDB0MjZqS3lHazR6clZMNTlhcXhjaUc3dFpwTmMyUUFBQUppUXlTdlBrTWtyCnp3QUFBQXR6YzJndFpXUXlOVFV4T1FBQUFDQVl4ZUhTL2gxd1YwTHgwdDI2akt5R2s0enJWTDU5YXF4Y2lHN3RacE5jMlEKQUFBRUNMU2doZEgwYUtyTFRxa0JuSk5MekJoZHJLZ2txc3ZiSGx3OXlWbW40d1pSakY0ZEwrSFhCWFF2SFMzYnFNcklhVApqT3RVdm4xcXJGeUlidTFtazF6WkFBQUFFR2RoZEdWM1lYa3RhRzl6ZEMxclpYa0JBZ01FQlE9PQotLS0tLUVORCBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0K"
+
+  # Authorized public keys for SSH client authentication
+  authorizedKeys:
+    - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIELHxeIC1I472rCZ7kJfQYwqtUvcUBCHLz8vMgFrAVsj gateway-client-key"
+
+# Single service exposing all ports via LoadBalancer
+service:
+  type: LoadBalancer
+  loadBalancerIP: ""
+  annotations: {}
+  # For MetalLB:
+  # annotations:
+  #   metallb.universe.tf/loadBalancerIPs: "10.0.0.50"
+
+  grpc:
+    enabled: true
+    port: 50051
+
+  gnmi:
+    enabled: true
+    port: 57400
+
+  ssh:
+    enabled: true
+    port: 22
+
+  netconf:
+    enabled: true
+    port: 830
+
+# Resource limits
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "250m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+# Probes
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 15
+    periodSeconds: 10
+  readiness:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5

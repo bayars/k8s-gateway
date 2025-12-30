@@ -1,0 +1,137 @@
+# Production-ready Helm values
+# Usage: helm install gateway ../helm/gateway -f values-production.yaml -n gateway --create-namespace
+
+replicaCount: 3
+
+image:
+  repository: ghcr.io/safabayar/gateway
+  tag: "v1.0.0"  # Pin to specific version
+  pullPolicy: IfNotPresent
+
+gateway:
+  logLevel: "info"
+
+# Device configuration
+devices:
+  domainSuffix: "prod.company.com"
+  defaultTimeout: 30
+  maxSessions: 500
+  entries:
+    # Add your production devices here
+    core-router1:
+      hostname: "10.0.1.1"
+      sshPort: 22
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "Core Router 1"
+      location: "DC1"
+    core-router2:
+      hostname: "10.0.1.2"
+      sshPort: 22
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "Core Router 2"
+      location: "DC2"
+
+# SSH configuration
+ssh:
+  # Use existing secret for host key (recommended for production)
+  existingHostKeySecret: "gateway-ssh-host-key"
+  hostKeySecretKey: "ssh_host_key"
+
+  # Or use existing ConfigMap for authorized keys
+  existingAuthorizedKeysConfigMap: "gateway-authorized-keys"
+
+# Single service exposing all ports via LoadBalancer
+service:
+  type: LoadBalancer
+  loadBalancerIP: ""
+  annotations:
+    # AWS NLB
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internal"
+    # Or for MetalLB
+    # metallb.universe.tf/loadBalancerIPs: "10.0.100.50"
+
+  grpc:
+    enabled: true
+    port: 50051
+
+  gnmi:
+    enabled: true
+    port: 57400
+
+  ssh:
+    enabled: true
+    port: 22
+
+  netconf:
+    enabled: true
+    port: 830
+
+# Enable Gateway API for ingress
+gatewayAPI:
+  enabled: true
+  gatewayClassName: "istio"
+  hostname: "*.prod.company.com"
+  tls:
+    enabled: true
+    existingSecret: "gateway-tls-cert"  # Use cert-manager
+
+# Resource limits (adjust based on load)
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "500m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+
+# Enable autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Node affinity for dedicated nodes
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+          topologyKey: kubernetes.io/hostname
+
+# Tolerations for dedicated nodes
+tolerations: []
+# - key: "gateway"
+#   operator: "Equal"
+#   value: "true"
+#   effect: "NoSchedule"
+
+# Pod annotations for monitoring
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9090"
+
+# Security context
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
