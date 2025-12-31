@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>Multi-Protocol Gateway</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+
+    <style>
+        :root {
+            --r-heading-color: #58a6ff;
+            --r-link-color: #58a6ff;
+        }
+        .reveal h1, .reveal h2, .reveal h3 {
+            text-transform: none;
+        }
+        .reveal pre {
+            width: 100%;
+            font-size: 0.45em;
+            box-shadow: none;
+        }
+        .reveal pre code {
+            max-height: 500px;
+            padding: 15px;
+            overflow: hidden;
+        }
+        .reveal table {
+            font-size: 0.7em;
+            margin: 20px auto;
+        }
+        .reveal table th {
+            background-color: #58a6ff;
+            color: #0d1117;
+        }
+        .reveal table td, .reveal table th {
+            padding: 10px 20px;
+            border: 1px solid #30363d;
+        }
+        .reveal .architecture-diagram {
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 0.5em;
+            line-height: 1.2;
+            text-align: left;
+            background: #161b22;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: none;
+            margin: 0 auto;
+        }
+        .reveal .architecture-diagram code {
+            font-family: 'Courier New', Consolas, monospace;
+            white-space: pre;
+            display: block;
+            overflow: visible;
+            padding: 0;
+        }
+        .reveal .highlight-box {
+            background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+            padding: 15px 25px;
+            border-radius: 8px;
+            display: inline-block;
+            margin: 10px;
+        }
+        .reveal .small-text {
+            font-size: 0.6em;
+        }
+        .reveal .benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            text-align: left;
+        }
+        .reveal .benefit-item {
+            background: #21262d;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #58a6ff;
+        }
+        .reveal .benefit-item h4 {
+            color: #58a6ff;
+            margin: 0 0 10px 0;
+        }
+        .reveal .benefit-item p {
+            margin: 0;
+            font-size: 0.8em;
+            color: #8b949e;
+        }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+            <!-- Title Slide -->
+            <section data-background-gradient="linear-gradient(135deg, #0d1117 0%, #161b22 100%)">
+                <h1>Multi-Protocol Gateway</h1>
+                <p>Unified Access to Network Devices</p>
+                <div style="margin-top: 40px;">
+                    <span class="highlight-box">gRPC</span>
+                    <span class="highlight-box">gNMI</span>
+                    <span class="highlight-box">SSH</span>
+                </div>
+                <p class="small-text" style="margin-top: 40px;">Navigate: <kbd>←</kbd><kbd>→</kbd> sections | <kbd>↑</kbd><kbd>↓</kbd> slides</p>
+            </section>
+
+            <!-- Overview Section -->
+            <section>
+                <section>
+                    <h2>Overview</h2>
+                    <p>A unified gateway providing secure, centralized access to network devices</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Protocol</th>
+                                <th>Port</th>
+                                <th>Use Case</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>gRPC</strong></td>
+                                <td>50051</td>
+                                <td>Command execution (SSH/Telnet/NETCONF)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>gNMI</strong></td>
+                                <td>57400</td>
+                                <td>Model-driven telemetry & configuration</td>
+                            </tr>
+                            <tr>
+                                <td><strong>SSH Bastion</strong></td>
+                                <td>2222</td>
+                                <td>Interactive shell access</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section>
+                    <h2>Architecture</h2>
+                    <pre class="architecture-diagram"><code>           ┌────────────────────────────────────────┐
+           │       Multi-Protocol Gateway           │
+           │                                        │
+  gnmic ──►│  gNMI Proxy    │   gRPC Server        │
+  grpcurl─►│   (57400)      │    (50051)           │
+  ssh ────►│         SSH Bastion (2222)            │
+           └──────────────────┬─────────────────────┘
+                              │
+               ┌──────────────┴──────────────┐
+               │                             │
+          ┌────▼────┐                  ┌─────▼────┐
+          │  srl1   │◄──── e1-1 ──────►│   srl2   │
+          │SR Linux │    10.1.1.0/24   │ SR Linux │
+          └─────────┘                  └──────────┘</code></pre>
+                </section>
+            </section>
+
+            <!-- Demo Setup Section -->
+            <section>
+                <section>
+                    <h2>Demo Setup</h2>
+                    <h3>Prerequisites</h3>
+                    <pre><code class="language-bash"># Install gnmic (gNMI client)
+curl -sL https://get-gnmic.openconfig.net | bash
+
+# Install grpcurl (gRPC client)
+go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+
+# Ensure kubectl is configured
+kubectl cluster-info</code></pre>
+                </section>
+
+                <section>
+                    <h3>Deploy Demo Environment</h3>
+                    <pre><code class="language-bash">cd demo
+./deploy-demo.sh</code></pre>
+                    <p>Or manually:</p>
+                    <pre><code class="language-bash"># 1. Deploy SR Linux topology
+kubectl apply -f clabernetes-topology-containerlab.yaml
+
+# 2. Wait for pods
+kubectl wait --for=condition=ready pod -l topology=srlinux-demo --timeout=300s
+
+# 3. Deploy gateway config
+kubectl apply -f gateway-config-demo.yaml
+
+# 4. Deploy gateway
+kubectl apply -f ../k8s/deployment.yaml</code></pre>
+                </section>
+
+                <section>
+                    <h3>Get Gateway IP</h3>
+                    <pre><code class="language-bash"># Get the LoadBalancer external IP
+export GATEWAY_IP=$(kubectl get svc gateway \
+    -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+echo "Gateway IP: $GATEWAY_IP"
+
+# Services available:
+# - gRPC:  $GATEWAY_IP:50051
+# - gNMI:  $GATEWAY_IP:57400
+# - SSH:   $GATEWAY_IP:22</code></pre>
+                </section>
+            </section>
+
+            <!-- Demo 1: gNMI Section -->
+            <section>
+                <section>
+                    <h2>Demo 1: gNMI with gnmic</h2>
+                    <p class="small-text">Note: SR Linux requires <code>--encoding json_ietf</code></p>
+                </section>
+
+                <section>
+                    <h3>Get System Information</h3>
+                    <pre><code class="language-bash">gnmic -a $GATEWAY_IP:57400 \
+  --insecure \
+  --encoding json_ietf \
+  -u admin -p NokiaSrl1! \
+  --target srl1.safabayar.net \
+  get \
+  --path /system/information</code></pre>
+                </section>
+
+                <section>
+                    <h3>Expected Output</h3>
+                    <pre><code class="language-json">{
+  "source": "$GATEWAY_IP:57400",
+  "updates": [{
+    "Path": "srl_nokia-system:system/srl_nokia-system-info:information",
+    "values": {
+      "current-datetime": "2025-12-29T20:12:39.367Z",
+      "description": "SRLinux-v25.10.1 7220 IXR-D3",
+      "version": "v25.10.1-399-g90c1dbe35ef"
+    }
+  }]
+}</code></pre>
+                </section>
+
+                <section>
+                    <h3>Get Interface Configuration</h3>
+                    <pre><code class="language-bash"># Get all interfaces
+gnmic -a $GATEWAY_IP:57400 \
+  --insecure --encoding json_ietf \
+  -u admin -p NokiaSrl1! \
+  --target srl1.safabayar.net \
+  get --path /interface
+
+# Get specific interface
+gnmic -a $GATEWAY_IP:57400 \
+  --insecure --encoding json_ietf \
+  -u admin -p NokiaSrl1! \
+  --target srl1.safabayar.net \
+  get --path /interface[name=ethernet-1/1]</code></pre>
+                </section>
+
+                <section>
+                    <h3>Configure Interface via gNMI Set</h3>
+                    <pre><code class="language-bash"># Set interface description
+gnmic -a $GATEWAY_IP:57400 \
+  --insecure --encoding json_ietf \
+  -u admin -p NokiaSrl1! \
+  --target srl1.safabayar.net \
+  set \
+  --update-path /interface[name=ethernet-1/1]/description \
+  --update-value '"Configured via Gateway gNMI"'</code></pre>
+                </section>
+
+                <section>
+                    <h3>Subscribe to Telemetry Stream</h3>
+                    <pre><code class="language-bash"># Subscribe to interface counters (STREAM mode)
+gnmic -a $GATEWAY_IP:57400 \
+  --insecure --encoding json_ietf \
+  -u admin -p NokiaSrl1! \
+  --target srl1.safabayar.net \
+  subscribe \
+  --path /interface[name=ethernet-1/1]/statistics \
+  --mode stream \
+  --stream-mode sample \
+  --sample-interval 5s</code></pre>
+                </section>
+
+                <section>
+                    <h3>Multi-Device Query</h3>
+                    <pre><code class="language-bash"># Query both devices simultaneously
+for device in srl1 srl2; do
+  echo "=== ${device} ==="
+  gnmic -a $GATEWAY_IP:57400 \
+    --insecure --encoding json_ietf \
+    -u admin -p NokiaSrl1! \
+    --target ${device}.safabayar.net \
+    get --path /system/name/host-name
+done</code></pre>
+                </section>
+            </section>
+
+            <!-- Demo 2: gRPC Section -->
+            <section>
+                <section>
+                    <h2>Demo 2: gRPC Command Execution</h2>
+                </section>
+
+                <section>
+                    <h3>Execute SSH Command via gRPC</h3>
+                    <pre><code class="language-bash">grpcurl -plaintext \
+  -d '{
+    "fqdn": "srl1.safabayar.net",
+    "username": "admin",
+    "password": "NokiaSrl1!",
+    "command": "show version",
+    "protocol": "ssh"
+  }' \
+  $GATEWAY_IP:50051 \
+  gateway.Gateway/ExecuteCommand</code></pre>
+                </section>
+
+                <section>
+                    <h3>Expected Output</h3>
+                    <pre><code class="language-json">{
+  "output": "Hostname          : srl1
+Chassis Type      : 7220 IXR-D3
+OS                : SR Linux
+Software Version  : v25.10.1
+Build Number      : 399-g90c1dbe35ef
+Architecture      : x86_64
+Last Booted       : 2025-12-29T19:16:01.398Z
+Total Memory      : 4005452 kB"
+}</code></pre>
+                </section>
+
+                <section>
+                    <h3>Show Interface Status</h3>
+                    <pre><code class="language-bash">grpcurl -plaintext \
+  -d '{
+    "fqdn": "srl1.safabayar.net",
+    "username": "admin",
+    "password": "NokiaSrl1!",
+    "command": "show interface brief",
+    "protocol": "ssh"
+  }' \
+  $GATEWAY_IP:50051 \
+  gateway.Gateway/ExecuteCommand</code></pre>
+                </section>
+
+                <section>
+                    <h3>Configure Device via SSH</h3>
+                    <pre><code class="language-bash">grpcurl -plaintext \
+  -d '{
+    "fqdn": "srl1.safabayar.net",
+    "username": "admin",
+    "password": "NokiaSrl1!",
+    "command": "enter candidate
+set / interface ethernet-1/2 description \"Via gRPC\"
+commit now",
+    "protocol": "ssh"
+  }' \
+  $GATEWAY_IP:50051 gateway.Gateway/ExecuteCommand</code></pre>
+                </section>
+            </section>
+
+            <!-- Demo 3: NETCONF Section -->
+            <section>
+                <section>
+                    <h2>Demo 3: NETCONF via gRPC</h2>
+                </section>
+
+                <section>
+                    <h3>Get Running Configuration</h3>
+                    <pre><code class="language-bash">grpcurl -plaintext \
+  -d '{
+    "fqdn": "srl1.safabayar.net",
+    "username": "admin",
+    "password": "NokiaSrl1!",
+    "command": "<get-config><source><running/></source></get-config>",
+    "protocol": "netconf"
+  }' \
+  $GATEWAY_IP:50051 \
+  gateway.Gateway/ExecuteCommand</code></pre>
+                </section>
+
+                <section>
+                    <h3>Get Interface Configuration</h3>
+                    <pre><code class="language-bash">grpcurl -plaintext \
+  -d '{
+    "fqdn": "srl1.safabayar.net",
+    "username": "admin",
+    "password": "NokiaSrl1!",
+    "command": "<get><filter type=\"subtree\">
+      <interface xmlns=\"urn:srl_nokia/interfaces\"/>
+    </filter></get>",
+    "protocol": "netconf"
+  }' \
+  $GATEWAY_IP:50051 gateway.Gateway/ExecuteCommand</code></pre>
+                </section>
+            </section>
+
+            <!-- Demo 4: SSH Bastion Section -->
+            <section>
+                <section>
+                    <h2>Demo 4: SSH Bastion Mode</h2>
+                </section>
+
+                <section>
+                    <h3>Connect via SSH Bastion</h3>
+                    <pre><code class="language-bash"># Connect to gateway and then to SR Linux
+ssh -i demo/ssh-keys/private/client_key \
+    -o StrictHostKeyChecking=no \
+    admin@$GATEWAY_IP \
+    "ssh srl1.safabayar.net"</code></pre>
+                </section>
+
+                <section>
+                    <h3>SSH ProxyJump Configuration</h3>
+                    <p>Add to <code>~/.ssh/config</code>:</p>
+                    <pre><code class="language-bash">Host gateway
+    HostName <GATEWAY_IP>
+    Port 22
+    User admin
+    IdentityFile ~/poc/gateway/demo/ssh-keys/private/client_key
+
+Host srl*.safabayar.net
+    ProxyJump gateway
+    User admin</code></pre>
+                    <p>Then connect directly:</p>
+                    <pre><code class="language-bash">ssh srl1.safabayar.net
+# Password: NokiaSrl1!</code></pre>
+                </section>
+            </section>
+
+            <!-- Demo 5: End-to-End Section -->
+            <section>
+                <section>
+                    <h2>Demo 5: End-to-End Verification</h2>
+                </section>
+
+                <section>
+                    <h3>Verify Connectivity Between Nodes</h3>
+                    <pre><code class="language-bash"># On srl1 - ping srl2
+grpcurl -plaintext \
+  -d '{
+    "fqdn": "srl1.safabayar.net",
+    "username": "admin",
+    "password": "NokiaSrl1!",
+    "command": "ping 10.1.1.2 count 3",
+    "protocol": "ssh"
+  }' \
+  $GATEWAY_IP:50051 \
+  gateway.Gateway/ExecuteCommand</code></pre>
+                </section>
+
+                <section>
+                    <h3>Compare Configurations via gNMI</h3>
+                    <pre><code class="language-bash"># Get interface config from both devices
+echo "=== srl1 interface ==="
+gnmic -a $GATEWAY_IP:57400 --insecure --encoding json_ietf \
+  -u admin -p NokiaSrl1! \
+  --target srl1.safabayar.net \
+  get --path /interface[name=ethernet-1/1]/subinterface[index=0]/ipv4
+
+echo "=== srl2 interface ==="
+gnmic -a $GATEWAY_IP:57400 --insecure --encoding json_ietf \
+  -u admin -p NokiaSrl1! \
+  --target srl2.safabayar.net \
+  get --path /interface[name=ethernet-1/1]/subinterface[index=0]/ipv4</code></pre>
+                </section>
+            </section>
+
+            <!-- Architecture Deep Dive Section -->
+            <section>
+                <section>
+                    <h2>Architecture Deep Dive</h2>
+                </section>
+
+                <section>
+                    <h3>FQDN-Based Device Routing</h3>
+                    <pre class="architecture-diagram"><code>srl1.customer.safabayar.net
+ │       │          │
+ │       │          └── Domain suffix (configurable)
+ │       └── Customer/tenant (optional)
+ └── Device name → maps to devices.yaml entry</code></pre>
+                </section>
+
+                <section>
+                    <h3>Protocol Flow</h3>
+                    <pre class="architecture-diagram"><code>┌─────────────────────────────────────────────────────┐
+│                      Gateway                        │
+│  ┌─────────┐   ┌─────────┐   ┌─────────────────┐   │
+│  │  gNMI   │   │  gRPC   │   │   SSH Bastion   │   │
+│  │ (57400) │   │ (50051) │   │     (2222)      │   │
+│  └────┬────┘   └────┬────┘   └───────┬─────────┘   │
+│       │             │                │             │
+│       │      ┌──────┴──────┐         │             │
+│       │      │  Protocol   │         │             │
+│       │      │  Selector   │         │             │
+│       │      └──────┬──────┘         │             │
+│       │   ┌─────────┼─────────┐      │             │
+│  ┌────┴─┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌──┴───┐        │
+│  │ gNMI │ │ SSH │ │Telnt│ │NETCF│ │ SSH  │        │
+│  └───┬──┘ └──┬──┘ └──┬──┘ └──┬──┘ └──┬───┘        │
+└──────┼───────┼───────┼───────┼───────┼─────────────┘
+       ▼       ▼       ▼       ▼       ▼
+   ┌─────────────────────────────────────────┐
+   │        Backend Network Devices          │
+   └─────────────────────────────────────────┘</code></pre>
+                </section>
+
+                <section>
+                    <h3>Authentication Model</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Path</th>
+                                <th>Client → Gateway</th>
+                                <th>Gateway → Device</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>gNMI</strong></td>
+                                <td>Username/Password in metadata</td>
+                                <td>gRPC credentials</td>
+                            </tr>
+                            <tr>
+                                <td><strong>gRPC</strong></td>
+                                <td>In request body</td>
+                                <td>SSH/Telnet password</td>
+                            </tr>
+                            <tr>
+                                <td><strong>SSH</strong></td>
+                                <td>Public key auth</td>
+                                <td>Password from lookup</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+            </section>
+
+            <!-- Benefits -->
+            <section>
+                <h2>Key Benefits</h2>
+                <div class="benefits-grid">
+                    <div class="benefit-item">
+                        <h4>Unified Access Point</h4>
+                        <p>Single gateway for all protocols</p>
+                    </div>
+                    <div class="benefit-item">
+                        <h4>FQDN-Based Routing</h4>
+                        <p>Dynamic device resolution</p>
+                    </div>
+                    <div class="benefit-item">
+                        <h4>Protocol Abstraction</h4>
+                        <p>Execute commands via any protocol through gRPC</p>
+                    </div>
+                    <div class="benefit-item">
+                        <h4>gNMI Proxy</h4>
+                        <p>Native gnmic support for SR Linux</p>
+                    </div>
+                    <div class="benefit-item">
+                        <h4>SSH Bastion</h4>
+                        <p>Secure jump host with public key auth</p>
+                    </div>
+                    <div class="benefit-item">
+                        <h4>Kubernetes Native</h4>
+                        <p>Designed for K8s deployment</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Troubleshooting & Cleanup Section -->
+            <section>
+                <section>
+                    <h2>Troubleshooting</h2>
+                    <pre><code class="language-bash"># Check Gateway Logs
+kubectl logs -f deployment/gateway
+
+# Test Direct Connectivity
+kubectl exec -it deployment/gateway -- \
+    nc -zv srl1.default.svc.cluster.local 57400
+
+# Verify SR Linux gRPC Server
+kubectl exec -it deployment/srl1 -- \
+    sr_cli "show system grpc-server"
+
+# Check Service Endpoints
+kubectl get svc | grep -E "(gateway|srl)"</code></pre>
+                </section>
+
+                <section>
+                    <h2>Cleanup</h2>
+                    <pre><code class="language-bash">cd demo
+./cleanup-demo.sh</code></pre>
+                    <p>Or manually:</p>
+                    <pre><code class="language-bash">kubectl delete topology srlinux-demo
+kubectl delete configmap gateway-config gateway-authorized-keys
+kubectl delete secret gateway-ssh-keys
+kubectl delete deployment gateway
+kubectl delete svc gateway</code></pre>
+                </section>
+            </section>
+
+            <!-- Thank You -->
+            <section data-background-gradient="linear-gradient(135deg, #0d1117 0%, #161b22 100%)">
+                <h1>Thank You!</h1>
+                <p>Multi-Protocol Gateway Demo</p>
+                <div style="margin-top: 40px;">
+                    <span class="highlight-box">gRPC</span>
+                    <span class="highlight-box">gNMI</span>
+                    <span class="highlight-box">SSH</span>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/markdown/markdown.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+    <script>
+        Reveal.initialize({
+            hash: true,
+            slideNumber: 'h.v',
+            transition: 'slide',
+            plugins: [ RevealMarkdown, RevealHighlight, RevealNotes ]
+        });
+    </script>
+</body>
+</html>
