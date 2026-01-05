@@ -1,0 +1,162 @@
+# Values for DC2 topology (dc2-topology.yaml)
+# Dual spine datacenter: 2 spines, 4 leaves, 4 traffic generators
+# Namespace: customerb, naming: prefixed
+
+replicaCount: 1
+
+image:
+  repository: 10.0.0.100/cks/gateway
+  tag: "latest"
+  pullPolicy: Always
+
+gateway:
+  logLevel: "info"
+  grpcPort: 50051
+  gnmiPort: 57400
+  sshPort: 2222
+  netconfPort: 830
+
+devices:
+  domainSuffix: "safabayar.net"
+  defaultTimeout: 30
+  maxSessions: 100
+
+  entries:
+    # SR Linux Spines
+    spine1:
+      hostname: "dc2-spine1.customerb.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "DC2 Spine 1 - SR Linux"
+      location: "DC2"
+
+    spine2:
+      hostname: "dc2-spine2.customerb.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "DC2 Spine 2 - SR Linux"
+      location: "DC2"
+
+    # FRR Leaves
+    leaf1:
+      hostname: "dc2-leaf1.customerb.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "DC2 Leaf 1 - FRR"
+      location: "DC2"
+
+    leaf2:
+      hostname: "dc2-leaf2.customerb.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "DC2 Leaf 2 - FRR"
+      location: "DC2"
+
+    leaf3:
+      hostname: "dc2-leaf3.customerb.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "DC2 Leaf 3 - FRR"
+      location: "DC2"
+
+    leaf4:
+      hostname: "dc2-leaf4.customerb.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "DC2 Leaf 4 - FRR"
+      location: "DC2"
+
+    # Traffic Generators (optional - for testing connectivity)
+    tgen1:
+      hostname: "dc2-tgen1.customerb.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "DC2 Traffic Generator 1"
+      location: "DC2"
+
+    tgen2:
+      hostname: "dc2-tgen2.customerb.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "DC2 Traffic Generator 2"
+      location: "DC2"
+
+    tgen3:
+      hostname: "dc2-tgen3.customerb.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "DC2 Traffic Generator 3"
+      location: "DC2"
+
+    tgen4:
+      hostname: "dc2-tgen4.customerb.svc.cluster.local"
+      sshPort: 22
+      telnetPort: 23
+      netconfPort: 830
+      gnmiPort: 57400
+      description: "DC2 Traffic Generator 4"
+      location: "DC2"
+
+ssh:
+  hostKey: ""
+  existingHostKeySecret: ""
+  hostKeySecretKey: "ssh_host_key"
+  authorizedKeys: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPfZ5RVkBqJFSHYtrSJ6jKEH1VpDSL5y7KFlc55PWieF"]
+
+service:
+  type: LoadBalancer
+  annotations: {}
+  grpc:
+    enabled: true
+    port: 50051
+  gnmi:
+    enabled: true
+    port: 57400
+  ssh:
+    enabled: true
+    port: 22
+  netconf:
+    enabled: true
+    port: 830
+
+gatewayAPI:
+  enabled: false
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "200m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+autoscaling:
+  enabled: false
+
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  readiness:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
