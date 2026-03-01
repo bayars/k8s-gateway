@@ -68,7 +68,7 @@ spec:
               value: application/grpc
       backendRefs:
         - name: {{ include "gateway.fullname" . }}-grpc
-          port: {{ .Values.services.grpc.port }}
+          port: {{ .Values.service.grpc.port }}
 {{- end }}
 ---
 {{- if .Values.gatewayAPI.sshRoute.enabled }}
@@ -85,7 +85,7 @@ spec:
   rules:
     - backendRefs:
         - name: {{ include "gateway.fullname" . }}-ssh
-          port: {{ .Values.services.ssh.port }}
+          port: {{ .Values.service.ssh.port }}
 {{- end }}
 ---
 {{- if and .Values.gatewayAPI.tls.enabled (not .Values.gatewayAPI.tls.existingSecret) .Values.gatewayAPI.tls.certificate .Values.gatewayAPI.tls.privateKey }}

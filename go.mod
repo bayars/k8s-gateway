@@ -7,6 +7,7 @@ toolchain go1.24.4
 require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/golang/protobuf v1.5.4
+	github.com/openconfig/gnmi v0.14.1
 	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/crypto v0.46.0
 	google.golang.org/grpc v1.77.0
@@ -14,7 +15,6 @@ require (
 )
 
 require (
-	github.com/openconfig/gnmi v0.14.1 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
