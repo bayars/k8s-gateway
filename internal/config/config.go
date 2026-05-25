@@ -145,7 +145,7 @@ func (h *ConfigHolder) reload(log *logrus.Logger) error {
 // Close stops the file watcher.
 func (h *ConfigHolder) Close() {
 	if h.watcher != nil {
-		h.watcher.Close()
+		_ = h.watcher.Close()
 	}
 }
 

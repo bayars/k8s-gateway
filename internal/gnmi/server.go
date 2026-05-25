@@ -154,7 +154,7 @@ func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -178,7 +178,7 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -203,7 +203,7 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -235,7 +235,7 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 	if err != nil {
 		return status.Error(codes.Unavailable, err.Error())
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Create subscription to backend
 	backendStream, err := client.Subscribe(stream.Context())

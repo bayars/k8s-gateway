@@ -31,13 +31,13 @@ func ExecuteNetconfCommand(hostname string, port int, username, password, comman
 	if err != nil {
 		return "", fmt.Errorf("failed to dial NETCONF: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	session, err := client.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("failed to create NETCONF session: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	// Request NETCONF subsystem
 	if err := session.RequestSubsystem("netconf"); err != nil {

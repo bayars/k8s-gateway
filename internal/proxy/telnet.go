@@ -3,6 +3,7 @@ package proxy
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 
 // ExecuteTelnetCommand executes a command on a remote device via Telnet
 func ExecuteTelnetCommand(hostname string, port int, username, password, command string) (string, error) {
-	address := fmt.Sprintf("%s:%d", hostname, port)
+	address := net.JoinHostPort(hostname, strconv.Itoa(port))
 	logger.Log.WithFields(map[string]interface{}{
 		"address":  address,
 		"username": username,
@@ -21,7 +22,7 @@ func ExecuteTelnetCommand(hostname string, port int, username, password, command
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to telnet: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Set read/write deadlines
 	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
