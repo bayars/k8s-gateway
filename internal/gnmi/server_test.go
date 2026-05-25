@@ -10,6 +10,10 @@ import (
 	"github.com/safabayar/gateway/internal/config"
 )
 
+func newHolder(cfg *config.Config) *config.ConfigHolder {
+	return config.NewConfigHolder(cfg, "")
+}
+
 func TestNewServer(t *testing.T) {
 	cfg := &config.Config{
 		Devices: map[string]config.DeviceConfig{
@@ -20,13 +24,13 @@ func TestNewServer(t *testing.T) {
 		},
 	}
 
-	server := NewServer(cfg)
+	server := NewServer(newHolder(cfg))
 	if server == nil {
 		t.Fatal("NewServer returned nil")
 	}
 
-	if server.config != cfg {
-		t.Error("Server config not set correctly")
+	if server.config == nil {
+		t.Error("Server config not set")
 	}
 }
 
@@ -34,7 +38,7 @@ func TestParseTarget(t *testing.T) {
 	cfg := &config.Config{
 		Devices: map[string]config.DeviceConfig{},
 	}
-	server := NewServer(cfg)
+	server := NewServer(newHolder(cfg))
 
 	tests := []struct {
 		name         string
@@ -111,7 +115,7 @@ func TestGetTargetFromContext(t *testing.T) {
 	cfg := &config.Config{
 		Devices: map[string]config.DeviceConfig{},
 	}
-	server := NewServer(cfg)
+	server := NewServer(newHolder(cfg))
 
 	tests := []struct {
 		name     string
@@ -218,7 +222,7 @@ func TestCapabilities_NoTarget(t *testing.T) {
 		},
 	}
 
-	server := NewServer(cfg)
+	server := NewServer(newHolder(cfg))
 	ctx := context.Background()
 
 	_, err := server.Capabilities(ctx, &gnmipb.CapabilityRequest{})
@@ -237,7 +241,7 @@ func TestGet_NoTarget(t *testing.T) {
 		},
 	}
 
-	server := NewServer(cfg)
+	server := NewServer(newHolder(cfg))
 	ctx := context.Background()
 
 	_, err := server.Get(ctx, &gnmipb.GetRequest{})
@@ -256,7 +260,7 @@ func TestSet_NoTarget(t *testing.T) {
 		},
 	}
 
-	server := NewServer(cfg)
+	server := NewServer(newHolder(cfg))
 	ctx := context.Background()
 
 	_, err := server.Set(ctx, &gnmipb.SetRequest{})

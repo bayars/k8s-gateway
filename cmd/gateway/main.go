@@ -34,20 +34,27 @@ func main() {
 	flag.Parse()
 
 	// Load configuration
-	cfg, err := config.LoadConfig(*configPath)
+	initialCfg, err := config.LoadConfig(*configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load configuration: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Initialize logger
-	if err := logger.InitLogger(*logPath, cfg.Settings.LogLevel); err != nil {
+	// Initialize logger before starting the watcher so watcher can use it
+	if err := logger.InitLogger(*logPath, initialCfg.Settings.LogLevel); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
 		os.Exit(1)
 	}
 
+	// Wrap config in a hot-reloadable holder
+	cfg := config.NewConfigHolder(initialCfg, *configPath)
+	if err := cfg.Watch(logger.Log); err != nil {
+		logger.Log.WithError(err).Warn("Failed to start device config watcher, dynamic updates disabled")
+	}
+	defer cfg.Close()
+
 	logger.Log.Info("Starting Multi-Protocol Gateway")
-	logger.Log.Infof("Loaded configuration for %d devices", len(cfg.Devices))
+	logger.Log.Infof("Loaded configuration for %d devices", len(initialCfg.Devices))
 
 	// Create channels for coordinating shutdown
 	errChan := make(chan error, 3)
@@ -93,7 +100,7 @@ func main() {
 	logger.Log.Info("Gateway stopped")
 }
 
-func startGRPCServer(cfg *config.Config, port int) error {
+func startGRPCServer(cfg *config.ConfigHolder, port int) error {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return fmt.Errorf("failed to listen on port %d: %w", port, err)
@@ -116,7 +123,7 @@ func startGRPCServer(cfg *config.Config, port int) error {
 	return nil
 }
 
-func startSSHBastion(cfg *config.Config, port int, hostKeyPath, authorizedKeysPath string) error {
+func startSSHBastion(cfg *config.ConfigHolder, port int, hostKeyPath, authorizedKeysPath string) error {
 	bastion, err := sshbastion.NewBastionServer(cfg, hostKeyPath, authorizedKeysPath)
 	if err != nil {
 		return fmt.Errorf("failed to create SSH bastion: %w", err)
@@ -131,7 +138,7 @@ func startSSHBastion(cfg *config.Config, port int, hostKeyPath, authorizedKeysPa
 	return nil
 }
 
-func startGNMIServer(cfg *config.Config, port int) error {
+func startGNMIServer(cfg *config.ConfigHolder, port int) error {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return fmt.Errorf("failed to listen on port %d: %w", port, err)

@@ -16,6 +16,10 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func newHolder(cfg *config.Config) *config.ConfigHolder {
+	return config.NewConfigHolder(cfg, "")
+}
+
 func TestNewServer(t *testing.T) {
 	cfg := &config.Config{
 		Devices: map[string]config.DeviceConfig{
@@ -29,13 +33,13 @@ func TestNewServer(t *testing.T) {
 		},
 	}
 
-	server := NewServer(cfg)
+	server := NewServer(newHolder(cfg))
 	if server == nil {
 		t.Fatal("NewServer returned nil")
 	}
 
-	if server.config != cfg {
-		t.Error("Server config not set correctly")
+	if server.config == nil {
+		t.Error("Server config not set")
 	}
 }
 
@@ -51,7 +55,7 @@ func TestExecuteCommand_Validation(t *testing.T) {
 		},
 	}
 
-	server := NewServer(cfg)
+	server := NewServer(newHolder(cfg))
 	ctx := context.Background()
 
 	tests := []struct {
@@ -166,7 +170,7 @@ func TestExecuteCommand_ProtocolSelection(t *testing.T) {
 		},
 	}
 
-	server := NewServer(cfg)
+	server := NewServer(newHolder(cfg))
 	ctx := context.Background()
 
 	// Test that different protocols are routed correctly

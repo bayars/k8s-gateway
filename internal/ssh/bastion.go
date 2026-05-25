@@ -18,7 +18,7 @@ import (
 
 // BastionServer implements SSH bastion/jump server functionality
 type BastionServer struct {
-	config             *config.Config
+	config             *config.ConfigHolder
 	sshConfig          *ssh.ServerConfig
 	authorizedKeys     map[string]ssh.PublicKey
 	authorizedKeysPath string
@@ -28,7 +28,7 @@ type BastionServer struct {
 }
 
 // NewBastionServer creates a new SSH bastion server
-func NewBastionServer(cfg *config.Config, hostKeyPath string, authorizedKeysPath string) (*BastionServer, error) {
+func NewBastionServer(cfg *config.ConfigHolder, hostKeyPath string, authorizedKeysPath string) (*BastionServer, error) {
 	bs := &BastionServer{
 		config:             cfg,
 		authorizedKeys:     make(map[string]ssh.PublicKey),
@@ -369,8 +369,9 @@ func (bs *BastionServer) runInteractiveShellWithTermInfo(channel ssh.Channel, us
 	_, _ = channel.Write([]byte("\r\n"))
 	_, _ = channel.Write([]byte("Available devices:\r\n"))
 
-	for deviceName := range bs.config.Devices {
-		_, _ = channel.Write([]byte(fmt.Sprintf("  • %s.%s\r\n", deviceName, bs.config.Settings.DomainSuffix)))
+	cfg := bs.config.Get()
+	for deviceName := range cfg.Devices {
+		_, _ = channel.Write([]byte(fmt.Sprintf("  • %s.%s\r\n", deviceName, cfg.Settings.DomainSuffix)))
 	}
 
 	_, _ = channel.Write([]byte("\r\n"))
@@ -405,8 +406,9 @@ func (bs *BastionServer) runInteractiveShellWithTermInfo(channel ssh.Channel, us
 
 		case command == "list" || command == "ls":
 			_, _ = channel.Write([]byte("\r\nAvailable devices:\r\n"))
-			for deviceName := range bs.config.Devices {
-				_, _ = channel.Write([]byte(fmt.Sprintf("  • %s.%s\r\n", deviceName, bs.config.Settings.DomainSuffix)))
+			lsCfg := bs.config.Get()
+			for deviceName := range lsCfg.Devices {
+				_, _ = channel.Write([]byte(fmt.Sprintf("  • %s.%s\r\n", deviceName, lsCfg.Settings.DomainSuffix)))
 			}
 			_, _ = channel.Write([]byte("\r\n"))
 
@@ -483,7 +485,7 @@ func (bs *BastionServer) handleCommandWithPty(channel ssh.Channel, defaultUserna
 	targetFQDN := parts[1]
 
 	// Get device config
-	device, deviceName, err := bs.config.GetDeviceByFQDN(targetFQDN)
+	device, deviceName, err := bs.config.Get().GetDeviceByFQDN(targetFQDN)
 	if err != nil {
 		_, _ = channel.Write([]byte(fmt.Sprintf("Error: %s\r\n", err)))
 		return
@@ -530,7 +532,7 @@ func (bs *BastionServer) handleCommand(channel ssh.Channel, defaultUsername, com
 	targetFQDN := parts[1]
 
 	// Get device config
-	device, deviceName, err := bs.config.GetDeviceByFQDN(targetFQDN)
+	device, deviceName, err := bs.config.Get().GetDeviceByFQDN(targetFQDN)
 	if err != nil {
 		_, _ = channel.Write([]byte(fmt.Sprintf("Error: %s\r\n", err)))
 		return

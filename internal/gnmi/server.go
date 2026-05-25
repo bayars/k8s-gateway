@@ -23,11 +23,11 @@ import (
 // Server implements gNMI proxy server
 type Server struct {
 	gnmipb.UnimplementedGNMIServer
-	config *config.Config
+	config *config.ConfigHolder
 }
 
 // NewServer creates a new gNMI proxy server
-func NewServer(cfg *config.Config) *Server {
+func NewServer(cfg *config.ConfigHolder) *Server {
 	return &Server{
 		config: cfg,
 	}
@@ -72,7 +72,7 @@ func (s *Server) parseTarget(target string) (string, string, string, error) {
 
 // getBackendClient creates a gNMI client connection to the backend device
 func (s *Server) getBackendClient(_ context.Context, fqdn, username, password string) (gnmipb.GNMIClient, *grpc.ClientConn, error) {
-	device, deviceName, err := s.config.GetDeviceByFQDN(fqdn)
+	device, deviceName, err := s.config.Get().GetDeviceByFQDN(fqdn)
 	if err != nil {
 		return nil, nil, fmt.Errorf("device not found: %w", err)
 	}

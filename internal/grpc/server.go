@@ -17,11 +17,11 @@ import (
 // Server implements the Gateway gRPC service
 type Server struct {
 	pb.UnimplementedGatewayServer
-	config *config.Config
+	config *config.ConfigHolder
 }
 
 // NewServer creates a new gRPC server instance
-func NewServer(cfg *config.Config) *Server {
+func NewServer(cfg *config.ConfigHolder) *Server {
 	return &Server{
 		config: cfg,
 	}
@@ -51,7 +51,7 @@ func (s *Server) ExecuteCommand(ctx context.Context, req *pb.CommandRequest) (*p
 	}
 
 	// Get device configuration
-	device, deviceName, err := s.config.GetDeviceByFQDN(req.Fqdn)
+	device, deviceName, err := s.config.Get().GetDeviceByFQDN(req.Fqdn)
 	if err != nil {
 		logger.Log.WithError(err).Error("Failed to get device config")
 		return nil, status.Error(codes.NotFound, err.Error())
@@ -134,7 +134,7 @@ func (s *Server) StreamCommand(stream pb.Gateway_StreamCommandServer) error {
 		// First message should contain connection details
 		if device == nil {
 			var err error
-			device, deviceName, err = s.config.GetDeviceByFQDN(req.Fqdn)
+			device, deviceName, err = s.config.Get().GetDeviceByFQDN(req.Fqdn)
 			if err != nil {
 				return status.Error(codes.NotFound, err.Error())
 			}
