@@ -638,6 +638,23 @@ func (bs *BastionServer) handleDirectTCPIP(_ *ssh.ServerConn, newChannel ssh.New
 
 	logger.Log.Infof("Direct TCP/IP forward request to %s:%d", payload.TargetAddr, payload.TargetPort)
 
+	// Resolve dial target: prefer device inventory, fall back to raw OS DNS.
+	// This allows ProxyJump with lab FQDNs (e.g. srl1.safabayar.net) to route
+	// to the device's internal Kubernetes hostname, while still supporting
+	// transparent forwarding for hosts with external DNS records.
+	dialHost := payload.TargetAddr
+	dialPort := int(payload.TargetPort)
+
+	device, deviceName, lookupErr := bs.config.Get().GetDeviceByFQDN(payload.TargetAddr)
+	if lookupErr == nil {
+		dialHost = device.Hostname
+		dialPort = device.SSHPort
+		logger.Log.Infof("Routing %s via inventory: %s:%d (device=%s)",
+			payload.TargetAddr, dialHost, dialPort, deviceName)
+	} else {
+		logger.Log.Infof("Target %s not in inventory, forwarding via OS DNS", payload.TargetAddr)
+	}
+
 	channel, requests, err := newChannel.Accept()
 	if err != nil {
 		logger.Log.WithError(err).Error("Failed to accept channel")
@@ -647,10 +664,10 @@ func (bs *BastionServer) handleDirectTCPIP(_ *ssh.ServerConn, newChannel ssh.New
 
 	go ssh.DiscardRequests(requests)
 
-	// Connect to target
-	targetConn, err := net.Dial("tcp", net.JoinHostPort(payload.TargetAddr, strconv.Itoa(int(payload.TargetPort))))
+	// Connect to resolved target
+	targetConn, err := net.Dial("tcp", net.JoinHostPort(dialHost, strconv.Itoa(dialPort)))
 	if err != nil {
-		logger.Log.WithError(err).Error("Failed to connect to target")
+		logger.Log.WithError(err).Errorf("Failed to connect to %s:%d", dialHost, dialPort)
 		return
 	}
 	defer func() { _ = targetConn.Close() }()
