@@ -31,13 +31,13 @@ func ExecuteSSHCommand(hostname string, port int, username, password, command st
 	if err != nil {
 		return "", fmt.Errorf("failed to dial SSH: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	session, err := client.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("failed to create SSH session: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

@@ -23,11 +23,11 @@ import (
 // Server implements gNMI proxy server
 type Server struct {
 	gnmipb.UnimplementedGNMIServer
-	config *config.Config
+	config *config.ConfigHolder
 }
 
 // NewServer creates a new gNMI proxy server
-func NewServer(cfg *config.Config) *Server {
+func NewServer(cfg *config.ConfigHolder) *Server {
 	return &Server{
 		config: cfg,
 	}
@@ -72,7 +72,7 @@ func (s *Server) parseTarget(target string) (string, string, string, error) {
 
 // getBackendClient creates a gNMI client connection to the backend device
 func (s *Server) getBackendClient(_ context.Context, fqdn, username, password string) (gnmipb.GNMIClient, *grpc.ClientConn, error) {
-	device, deviceName, err := s.config.GetDeviceByFQDN(fqdn)
+	device, deviceName, err := s.config.Get().GetDeviceByFQDN(fqdn)
 	if err != nil {
 		return nil, nil, fmt.Errorf("device not found: %w", err)
 	}
@@ -154,7 +154,7 @@ func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -178,7 +178,7 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -203,7 +203,7 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -235,7 +235,7 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 	if err != nil {
 		return status.Error(codes.Unavailable, err.Error())
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Create subscription to backend
 	backendStream, err := client.Subscribe(stream.Context())

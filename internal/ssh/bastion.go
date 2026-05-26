@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -18,7 +19,7 @@ import (
 
 // BastionServer implements SSH bastion/jump server functionality
 type BastionServer struct {
-	config             *config.Config
+	config             *config.ConfigHolder
 	sshConfig          *ssh.ServerConfig
 	authorizedKeys     map[string]ssh.PublicKey
 	authorizedKeysPath string
@@ -28,7 +29,7 @@ type BastionServer struct {
 }
 
 // NewBastionServer creates a new SSH bastion server
-func NewBastionServer(cfg *config.Config, hostKeyPath string, authorizedKeysPath string) (*BastionServer, error) {
+func NewBastionServer(cfg *config.ConfigHolder, hostKeyPath string, authorizedKeysPath string) (*BastionServer, error) {
 	bs := &BastionServer{
 		config:             cfg,
 		authorizedKeys:     make(map[string]ssh.PublicKey),
@@ -245,10 +246,10 @@ func (bs *BastionServer) handleConnection(netConn net.Conn) {
 	sshConn, chans, reqs, err := ssh.NewServerConn(netConn, bs.sshConfig)
 	if err != nil {
 		logger.Log.WithError(err).Error("Failed to handshake")
-		netConn.Close()
+		_ = netConn.Close()
 		return
 	}
-	defer sshConn.Close()
+	defer func() { _ = sshConn.Close() }()
 
 	logger.Log.Infof("SSH connection established for user %s from %s", sshConn.User(), sshConn.RemoteAddr())
 
@@ -300,7 +301,7 @@ func (bs *BastionServer) handleSession(sshConn *ssh.ServerConn, newChannel ssh.N
 		logger.Log.WithError(err).Error("Failed to accept channel")
 		return
 	}
-	defer channel.Close()
+	defer func() { _ = channel.Close() }()
 
 	username := sshConn.User()
 
@@ -369,8 +370,9 @@ func (bs *BastionServer) runInteractiveShellWithTermInfo(channel ssh.Channel, us
 	_, _ = channel.Write([]byte("\r\n"))
 	_, _ = channel.Write([]byte("Available devices:\r\n"))
 
-	for deviceName := range bs.config.Devices {
-		_, _ = channel.Write([]byte(fmt.Sprintf("  • %s.%s\r\n", deviceName, bs.config.Settings.DomainSuffix)))
+	cfg := bs.config.Get()
+	for deviceName := range cfg.Devices {
+		_, _ = fmt.Fprintf(channel, "  • %s.%s\r\n", deviceName, cfg.Settings.DomainSuffix)
 	}
 
 	_, _ = channel.Write([]byte("\r\n"))
@@ -405,8 +407,9 @@ func (bs *BastionServer) runInteractiveShellWithTermInfo(channel ssh.Channel, us
 
 		case command == "list" || command == "ls":
 			_, _ = channel.Write([]byte("\r\nAvailable devices:\r\n"))
-			for deviceName := range bs.config.Devices {
-				_, _ = channel.Write([]byte(fmt.Sprintf("  • %s.%s\r\n", deviceName, bs.config.Settings.DomainSuffix)))
+			lsCfg := bs.config.Get()
+			for deviceName := range lsCfg.Devices {
+				_, _ = fmt.Fprintf(channel, "  • %s.%s\r\n", deviceName, lsCfg.Settings.DomainSuffix)
 			}
 			_, _ = channel.Write([]byte("\r\n"))
 
@@ -421,7 +424,7 @@ func (bs *BastionServer) runInteractiveShellWithTermInfo(channel ssh.Channel, us
 			_, _ = channel.Write([]byte("\r\n"))
 
 		default:
-			_, _ = channel.Write([]byte(fmt.Sprintf("Unknown command: %s\r\n", command)))
+			_, _ = fmt.Fprintf(channel, "Unknown command: %s\r\n", command)
 			_, _ = channel.Write([]byte("Use 'ssh <device-fqdn>' to connect or 'exit' to quit\r\n"))
 		}
 	}
@@ -483,19 +486,19 @@ func (bs *BastionServer) handleCommandWithPty(channel ssh.Channel, defaultUserna
 	targetFQDN := parts[1]
 
 	// Get device config
-	device, deviceName, err := bs.config.GetDeviceByFQDN(targetFQDN)
+	device, deviceName, err := bs.config.Get().GetDeviceByFQDN(targetFQDN)
 	if err != nil {
-		_, _ = channel.Write([]byte(fmt.Sprintf("Error: %s\r\n", err)))
+		_, _ = fmt.Fprintf(channel, "Error: %s\r\n", err)
 		return
 	}
 
-	_, _ = channel.Write([]byte(fmt.Sprintf("Connecting to %s (%s)...\r\n", deviceName, device.Hostname)))
+	_, _ = fmt.Fprintf(channel, "Connecting to %s (%s)...\r\n", deviceName, device.Hostname)
 
 	// Prompt for username
-	_, _ = channel.Write([]byte(fmt.Sprintf("Username [%s]: ", defaultUsername)))
+	_, _ = fmt.Fprintf(channel, "Username [%s]: ", defaultUsername)
 	usernameInput, err := bs.readLine(channel)
 	if err != nil {
-		_, _ = channel.Write([]byte(fmt.Sprintf("Error reading username: %s\r\n", err)))
+		_, _ = fmt.Fprintf(channel, "Error reading username: %s\r\n", err)
 		return
 	}
 
@@ -509,7 +512,7 @@ func (bs *BastionServer) handleCommandWithPty(channel ssh.Channel, defaultUserna
 	_, _ = channel.Write([]byte("Password: "))
 	password, err := bs.readPassword(channel)
 	if err != nil {
-		_, _ = channel.Write([]byte(fmt.Sprintf("\r\nError reading password: %s\r\n", err)))
+		_, _ = fmt.Fprintf(channel, "\r\nError reading password: %s\r\n", err)
 		return
 	}
 	_, _ = channel.Write([]byte("\r\n"))
@@ -530,19 +533,19 @@ func (bs *BastionServer) handleCommand(channel ssh.Channel, defaultUsername, com
 	targetFQDN := parts[1]
 
 	// Get device config
-	device, deviceName, err := bs.config.GetDeviceByFQDN(targetFQDN)
+	device, deviceName, err := bs.config.Get().GetDeviceByFQDN(targetFQDN)
 	if err != nil {
-		_, _ = channel.Write([]byte(fmt.Sprintf("Error: %s\r\n", err)))
+		_, _ = fmt.Fprintf(channel, "Error: %s\r\n", err)
 		return
 	}
 
-	_, _ = channel.Write([]byte(fmt.Sprintf("Connecting to %s (%s)...\r\n", deviceName, device.Hostname)))
+	_, _ = fmt.Fprintf(channel, "Connecting to %s (%s)...\r\n", deviceName, device.Hostname)
 
 	// Prompt for username
-	_, _ = channel.Write([]byte(fmt.Sprintf("Username [%s]: ", defaultUsername)))
+	_, _ = fmt.Fprintf(channel, "Username [%s]: ", defaultUsername)
 	usernameInput, err := bs.readLine(channel)
 	if err != nil {
-		_, _ = channel.Write([]byte(fmt.Sprintf("Error reading username: %s\r\n", err)))
+		_, _ = fmt.Fprintf(channel, "Error reading username: %s\r\n", err)
 		return
 	}
 
@@ -556,7 +559,7 @@ func (bs *BastionServer) handleCommand(channel ssh.Channel, defaultUsername, com
 	_, _ = channel.Write([]byte("Password: "))
 	password, err := bs.readPassword(channel)
 	if err != nil {
-		_, _ = channel.Write([]byte(fmt.Sprintf("\r\nError reading password: %s\r\n", err)))
+		_, _ = fmt.Fprintf(channel, "\r\nError reading password: %s\r\n", err)
 		return
 	}
 	_, _ = channel.Write([]byte("\r\n"))
@@ -640,17 +643,17 @@ func (bs *BastionServer) handleDirectTCPIP(_ *ssh.ServerConn, newChannel ssh.New
 		logger.Log.WithError(err).Error("Failed to accept channel")
 		return
 	}
-	defer channel.Close()
+	defer func() { _ = channel.Close() }()
 
 	go ssh.DiscardRequests(requests)
 
 	// Connect to target
-	targetConn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", payload.TargetAddr, payload.TargetPort))
+	targetConn, err := net.Dial("tcp", net.JoinHostPort(payload.TargetAddr, strconv.Itoa(int(payload.TargetPort))))
 	if err != nil {
 		logger.Log.WithError(err).Error("Failed to connect to target")
 		return
 	}
-	defer targetConn.Close()
+	defer func() { _ = targetConn.Close() }()
 
 	// Bidirectional copy
 	var wg sync.WaitGroup
@@ -692,18 +695,18 @@ func (bs *BastionServer) proxyToDevice(clientChannel ssh.Channel, device *config
 	targetAddr := fmt.Sprintf("%s:%d", device.Hostname, device.SSHPort)
 	targetConn, err := ssh.Dial("tcp", targetAddr, targetConfig)
 	if err != nil {
-		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to connect to device: %s\n", err)))
+		_, _ = fmt.Fprintf(clientChannel, "\nError: Failed to connect to device: %s\n", err)
 		return
 	}
-	defer targetConn.Close()
+	defer func() { _ = targetConn.Close() }()
 
 	// Create session on target
 	targetSession, err := targetConn.NewSession()
 	if err != nil {
-		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to create session: %s\n", err)))
+		_, _ = fmt.Fprintf(clientChannel, "\nError: Failed to create session: %s\n", err)
 		return
 	}
-	defer targetSession.Close()
+	defer func() { _ = targetSession.Close() }()
 
 	// Setup I/O
 	targetSession.Stdout = clientChannel
@@ -718,13 +721,13 @@ func (bs *BastionServer) proxyToDevice(clientChannel ssh.Channel, device *config
 	}
 
 	if err := targetSession.RequestPty("xterm", 80, 40, modes); err != nil {
-		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to request PTY: %s\n", err)))
+		_, _ = fmt.Fprintf(clientChannel, "\nError: Failed to request PTY: %s\n", err)
 		return
 	}
 
 	// Start shell
 	if err := targetSession.Shell(); err != nil {
-		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to start shell: %s\n", err)))
+		_, _ = fmt.Fprintf(clientChannel, "\nError: Failed to start shell: %s\n", err)
 		return
 	}
 
@@ -755,18 +758,18 @@ func (bs *BastionServer) proxyToDeviceWithPty(clientChannel ssh.Channel, device 
 	targetAddr := fmt.Sprintf("%s:%d", device.Hostname, device.SSHPort)
 	targetConn, err := ssh.Dial("tcp", targetAddr, targetConfig)
 	if err != nil {
-		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to connect to device: %s\n", err)))
+		_, _ = fmt.Fprintf(clientChannel, "\nError: Failed to connect to device: %s\n", err)
 		return
 	}
-	defer targetConn.Close()
+	defer func() { _ = targetConn.Close() }()
 
 	// Create session on target
 	targetSession, err := targetConn.NewSession()
 	if err != nil {
-		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to create session: %s\n", err)))
+		_, _ = fmt.Fprintf(clientChannel, "\nError: Failed to create session: %s\n", err)
 		return
 	}
-	defer targetSession.Close()
+	defer func() { _ = targetSession.Close() }()
 
 	// Setup I/O
 	targetSession.Stdout = clientChannel
@@ -795,7 +798,7 @@ func (bs *BastionServer) proxyToDeviceWithPty(clientChannel ssh.Channel, device 
 	}
 
 	if err := targetSession.RequestPty(term, rows, cols, modes); err != nil {
-		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to request PTY: %s\n", err)))
+		_, _ = fmt.Fprintf(clientChannel, "\nError: Failed to request PTY: %s\n", err)
 		return
 	}
 
@@ -821,7 +824,7 @@ func (bs *BastionServer) proxyToDeviceWithPty(clientChannel ssh.Channel, device 
 
 	// Start shell
 	if err := targetSession.Shell(); err != nil {
-		_, _ = clientChannel.Write([]byte(fmt.Sprintf("\nError: Failed to start shell: %s\n", err)))
+		_, _ = fmt.Fprintf(clientChannel, "\nError: Failed to start shell: %s\n", err)
 		return
 	}
 
@@ -833,7 +836,7 @@ func (bs *BastionServer) proxyToDeviceWithPty(clientChannel ssh.Channel, device 
 // Stop stops the SSH bastion server
 func (bs *BastionServer) Stop() error {
 	if bs.watcher != nil {
-		bs.watcher.Close()
+		_ = bs.watcher.Close()
 	}
 	if bs.listener != nil {
 		return bs.listener.Close()
