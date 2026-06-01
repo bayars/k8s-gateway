@@ -305,6 +305,18 @@ func (bs *BastionServer) handleSession(sshConn *ssh.ServerConn, newChannel ssh.N
 
 	username := sshConn.User()
 
+	// If the SSH username matches a device name in the inventory, treat this as a
+	// direct device connection (no ProxyJump needed). The user SSHes as:
+	//   ssh srl1@gateway.safabayar.net   (username = device key)
+	// and the bastion auto-proxies to that device instead of showing the shell.
+	cfg := bs.config.Get()
+	var autoProxyDevice *config.DeviceConfig
+	if dev, exists := cfg.Devices[username]; exists {
+		devCopy := dev
+		autoProxyDevice = &devCopy
+		logger.Log.Infof("Username %q matches device in inventory — will auto-proxy on shell request", username)
+	}
+
 	// Terminal info from client
 	var termInfo ptyRequestMsg
 	termInfo.Term = "xterm-256color"
@@ -332,8 +344,13 @@ func (bs *BastionServer) handleSession(sshConn *ssh.ServerConn, newChannel ssh.N
 
 		case "shell":
 			_ = req.Reply(true, nil)
-			// Run interactive shell with terminal info
-			bs.runInteractiveShellWithPty(channel, username, &termInfo, requests)
+			if autoProxyDevice != nil {
+				// Direct device session: username is a device key → auto-proxy
+				bs.autoProxyDeviceSession(channel, username, autoProxyDevice, &termInfo, requests)
+			} else {
+				// Normal bastion interactive shell
+				bs.runInteractiveShellWithPty(channel, username, &termInfo, requests)
+			}
 			return
 
 		case "exec":
@@ -351,6 +368,36 @@ func (bs *BastionServer) handleSession(sshConn *ssh.ServerConn, newChannel ssh.N
 			_ = req.Reply(false, nil)
 		}
 	}
+}
+
+// autoProxyDeviceSession handles a direct device session when the SSH username matches
+// a device name. Prompts for device credentials then transparently proxies.
+func (bs *BastionServer) autoProxyDeviceSession(channel ssh.Channel, defaultUsername string, device *config.DeviceConfig, termInfo *ptyRequestMsg, requests <-chan *ssh.Request) {
+	_, _ = fmt.Fprintf(channel, "Connecting to %s (%s)...\r\n", defaultUsername, device.Hostname)
+
+	// Prompt for device username (default = SSH username = device key)
+	_, _ = fmt.Fprintf(channel, "Username [%s]: ", defaultUsername)
+	usernameInput, err := bs.readLine(channel)
+	if err != nil {
+		_, _ = fmt.Fprintf(channel, "Error reading username: %s\r\n", err)
+		return
+	}
+	deviceUsername := strings.TrimSpace(usernameInput)
+	if deviceUsername == "" {
+		deviceUsername = defaultUsername
+	}
+
+	// Prompt for device password
+	_, _ = channel.Write([]byte("Password: "))
+	password, err := bs.readPassword(channel)
+	if err != nil {
+		_, _ = fmt.Fprintf(channel, "\r\nError reading password: %s\r\n", err)
+		return
+	}
+	_, _ = channel.Write([]byte("\r\n"))
+
+	logger.Log.Infof("Auto-proxying to device %s as user %s", device.Hostname, deviceUsername)
+	bs.proxyToDeviceWithPty(channel, device, deviceUsername, password, termInfo, requests)
 }
 
 // runInteractiveShellWithPty provides an interactive shell with PTY support
@@ -638,6 +685,23 @@ func (bs *BastionServer) handleDirectTCPIP(_ *ssh.ServerConn, newChannel ssh.New
 
 	logger.Log.Infof("Direct TCP/IP forward request to %s:%d", payload.TargetAddr, payload.TargetPort)
 
+	// Resolve dial target: prefer device inventory, fall back to raw OS DNS.
+	// This allows ProxyJump with lab FQDNs (e.g. srl1.safabayar.net) to route
+	// to the device's internal Kubernetes hostname, while still supporting
+	// transparent forwarding for hosts with external DNS records.
+	dialHost := payload.TargetAddr
+	dialPort := int(payload.TargetPort)
+
+	device, deviceName, lookupErr := bs.config.Get().GetDeviceByFQDN(payload.TargetAddr)
+	if lookupErr == nil {
+		dialHost = device.Hostname
+		dialPort = device.SSHPort
+		logger.Log.Infof("Routing %s via inventory: %s:%d (device=%s)",
+			payload.TargetAddr, dialHost, dialPort, deviceName)
+	} else {
+		logger.Log.Infof("Target %s not in inventory, forwarding via OS DNS", payload.TargetAddr)
+	}
+
 	channel, requests, err := newChannel.Accept()
 	if err != nil {
 		logger.Log.WithError(err).Error("Failed to accept channel")
@@ -647,10 +711,10 @@ func (bs *BastionServer) handleDirectTCPIP(_ *ssh.ServerConn, newChannel ssh.New
 
 	go ssh.DiscardRequests(requests)
 
-	// Connect to target
-	targetConn, err := net.Dial("tcp", net.JoinHostPort(payload.TargetAddr, strconv.Itoa(int(payload.TargetPort))))
+	// Connect to resolved target
+	targetConn, err := net.Dial("tcp", net.JoinHostPort(dialHost, strconv.Itoa(dialPort)))
 	if err != nil {
-		logger.Log.WithError(err).Error("Failed to connect to target")
+		logger.Log.WithError(err).Errorf("Failed to connect to %s:%d", dialHost, dialPort)
 		return
 	}
 	defer func() { _ = targetConn.Close() }()
