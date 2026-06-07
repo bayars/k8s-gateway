@@ -12,12 +12,21 @@ import (
 
 // ExecuteSSHCommand executes a command on a remote device via SSH
 func ExecuteSSHCommand(hostname string, port int, username, password, command string) (string, error) {
+	kbdAuth := ssh.RetryableAuthMethod(ssh.KeyboardInteractive(
+		func(_, _ string, questions []string, _ []bool) ([]string, error) {
+			answers := make([]string, len(questions))
+			for i := range questions {
+				answers[i] = password
+			}
+			return answers, nil
+		}), 3)
 	config := &ssh.ClientConfig{
 		User: username,
 		Auth: []ssh.AuthMethod{
 			ssh.Password(password),
+			kbdAuth,
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // In production, use proper host key verification
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         30 * time.Second,
 	}
 
