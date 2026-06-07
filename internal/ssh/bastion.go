@@ -17,6 +17,7 @@ import (
 	"github.com/safabayar/gateway/internal/logger"
 )
 
+
 // BastionServer implements SSH bastion/jump server functionality
 type BastionServer struct {
 	config             *config.ConfigHolder
@@ -41,6 +42,15 @@ func NewBastionServer(cfg *config.ConfigHolder, hostKeyPath string, authorizedKe
 		return nil, fmt.Errorf("failed to load authorized keys: %w", err)
 	}
 
+	// Refuse to start if no authorized keys are configured — accepting all keys
+	// would allow any SSH client to authenticate, which is a critical bypass.
+	bs.mu.RLock()
+	keyCount := len(bs.authorizedKeys)
+	bs.mu.RUnlock()
+	if keyCount == 0 {
+		return nil, fmt.Errorf("no authorized keys loaded from %q: configure at least one public key before starting the SSH bastion", authorizedKeysPath)
+	}
+
 	// Start watching for authorized keys changes
 	if err := bs.watchAuthorizedKeys(); err != nil {
 		logger.Log.WithError(err).Warn("Failed to start authorized keys watcher, dynamic updates disabled")
@@ -49,6 +59,17 @@ func NewBastionServer(cfg *config.ConfigHolder, hostKeyPath string, authorizedKe
 	// Configure SSH server
 	sshConfig := &ssh.ServerConfig{
 		PublicKeyCallback: bs.publicKeyCallback,
+		// Accept password auth so agents can use sshpass without needing a key.
+		// The provided password is stored and forwarded to the target device.
+		PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+			logger.Log.Infof("Password authentication accepted for user %s", conn.User())
+			return &ssh.Permissions{
+				Extensions: map[string]string{
+					"auth-method":     "password",
+					"device-password": string(password),
+				},
+			}, nil
+		},
 	}
 
 	// Load host key
@@ -189,19 +210,8 @@ func (bs *BastionServer) publicKeyCallback(conn ssh.ConnMetadata, key ssh.Public
 
 	// Thread-safe read of authorized keys
 	bs.mu.RLock()
-	keyCount := len(bs.authorizedKeys)
 	_, exists := bs.authorizedKeys[string(key.Marshal())]
 	bs.mu.RUnlock()
-
-	// If no authorized keys loaded, accept all (INSECURE - for development only)
-	if keyCount == 0 {
-		logger.Log.Warn("No authorized keys configured, accepting all connections (INSECURE)")
-		return &ssh.Permissions{
-			Extensions: map[string]string{
-				"pubkey-fp": ssh.FingerprintSHA256(key),
-			},
-		}, nil
-	}
 
 	// Check if key is authorized
 	if exists {
@@ -354,12 +364,20 @@ func (bs *BastionServer) handleSession(sshConn *ssh.ServerConn, newChannel ssh.N
 			return
 
 		case "exec":
-			// Parse command - expected format: "ssh router1.myCustomer.safabayar.net"
-			command := string(req.Payload[4:]) // Skip length prefix
+			// Parse command from SSH exec payload (4-byte length prefix)
+			command := string(req.Payload[4:])
 
 			logger.Log.Infof("Exec request from %s: %s", username, command)
 
-			// Handle the command with terminal info
+			// Non-interactive agent path: SSH username is the device key.
+			// Agents use: sshpass -p DEVICEPASS ssh DEVICENAME@GATEWAY "command"
+			if autoProxyDevice != nil {
+				_ = req.Reply(true, nil)
+				bs.executeNonInteractive(channel, sshConn, autoProxyDevice, username, command)
+				return
+			}
+
+			// Interactive format: "ssh <device-fqdn>"
 			bs.handleCommandWithPty(channel, username, command, &termInfo, requests)
 			_ = req.Reply(true, nil)
 			return
@@ -567,6 +585,76 @@ func (bs *BastionServer) handleCommandWithPty(channel ssh.Channel, defaultUserna
 	// Connect to target device with PTY info
 	logger.Log.Infof("Proxying to device with PTY: cols=%d, rows=%d, term=%s", termInfo.Columns, termInfo.Rows, termInfo.Term)
 	bs.proxyToDeviceWithPty(channel, device, username, password, termInfo, requests)
+}
+
+// executeNonInteractive runs a command on a device non-interactively.
+// device is already resolved from the SSH username (the device key).
+// The device username comes from device.Username in config; the password from PasswordCallback.
+// Agents use: sshpass -p DEVICEPASS ssh DEVICENAME@GATEWAY "command"
+func (bs *BastionServer) executeNonInteractive(channel ssh.Channel, sshConn *ssh.ServerConn, device *config.DeviceConfig, deviceName, command string) {
+	password := ""
+	if sshConn.Permissions != nil {
+		password = sshConn.Permissions.Extensions["device-password"]
+	}
+	if password == "" {
+		_, _ = fmt.Fprintf(channel, "error: no password available — use sshpass -p PASS\n")
+		return
+	}
+
+	deviceUser := device.Username
+	if deviceUser == "" {
+		_, _ = fmt.Fprintf(channel, "error: no username configured for device %s\n", deviceName)
+		return
+	}
+
+	logger.Log.Infof("Non-interactive exec on %s (%s) as %s: %s", deviceName, device.Hostname, deviceUser, command)
+
+	kbdAuth := ssh.RetryableAuthMethod(ssh.KeyboardInteractive(
+		func(_, _ string, questions []string, _ []bool) ([]string, error) {
+			answers := make([]string, len(questions))
+			for i := range questions {
+				answers[i] = password
+			}
+			return answers, nil
+		}), 3)
+	targetConfig := &ssh.ClientConfig{
+		User: deviceUser,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+			kbdAuth,
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	targetAddr := fmt.Sprintf("%s:%d", device.Hostname, device.SSHPort)
+	targetConn, err := ssh.Dial("tcp", targetAddr, targetConfig)
+	if err != nil {
+		_, _ = fmt.Fprintf(channel, "error: failed to connect to %s: %s\n", deviceName, err)
+		return
+	}
+	defer func() { _ = targetConn.Close() }()
+
+	session, err := targetConn.NewSession()
+	if err != nil {
+		_, _ = fmt.Fprintf(channel, "error: failed to create session: %s\n", err)
+		return
+	}
+	defer func() { _ = session.Close() }()
+
+	session.Stdout = channel
+	session.Stderr = channel
+
+	exitCode := 0
+	if err := session.Run(command); err != nil {
+		logger.Log.WithError(err).Warnf("Command on %s exited with error", deviceName)
+		exitCode = 1
+		if exitErr, ok := err.(*ssh.ExitError); ok {
+			exitCode = exitErr.ExitStatus()
+		}
+	}
+
+	exitStatusPayload := ssh.Marshal(struct{ Status uint32 }{uint32(exitCode)})
+	_, _ = channel.SendRequest("exit-status", false, exitStatusPayload)
 }
 
 // handleCommand processes ssh commands (legacy without PTY)

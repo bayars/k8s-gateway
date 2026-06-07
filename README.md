@@ -214,6 +214,7 @@ devices:
     netconf_port: 830
     description: "<description>"
     location: "<location>"
+    username: "<device-login-user>"  # required for non-interactive agent exec
 
 settings:
   domain_suffix: "safabayar.net"

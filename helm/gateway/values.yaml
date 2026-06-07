@@ -82,6 +82,7 @@ devices:
   #     gnmiPort: 57400
   #     description: "SR Linux Node 1"
   #     location: "Lab"
+  #     username: admin     # required for non-interactive agent exec (sshpass)
 
 # SSH configuration
 ssh:

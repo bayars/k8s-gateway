@@ -21,6 +21,7 @@ type DeviceConfig struct {
 	GNMIPort    int    `yaml:"gnmi_port"`
 	Description string `yaml:"description"`
 	Location    string `yaml:"location"`
+	Username    string `yaml:"username"`
 }
 
 // Settings represents global gateway settings
