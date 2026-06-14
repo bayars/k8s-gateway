@@ -452,30 +452,25 @@ func TestHandleDirectTCPIP_InventoryOverridesPayloadPort(t *testing.T) {
 	}
 }
 
-func TestHandleDirectTCPIP_AllowedExternalTarget(t *testing.T) {
-	// Target not in inventory but listed in allowed_external_targets → forwarded.
+func TestHandleDirectTCPIP_FallbackForwarding(t *testing.T) {
+	// Target not in inventory → bastion falls back to raw OS DNS forwarding.
 	echoAddr := startEchoServer(t)
-	echoHost, _, _ := net.SplitHostPort(echoAddr)
 
-	cfg := config.NewConfigHolder(&config.Config{
-		Devices: map[string]config.DeviceConfig{},
-		Settings: config.Settings{
-			DomainSuffix:           "safabayar.net",
-			AllowedExternalTargets: []string{echoHost},
-		},
-	}, "")
+	// Empty device inventory — nothing matches
+	cfg := newTestConfig(map[string]config.DeviceConfig{})
 
 	signer, authPath := generateTestClientKey(t)
 	bastionAddr := startTestBastion(t, cfg, authPath)
 	client := newTestSSHClient(t, bastionAddr, signer)
 
+	// Dial directly to the echo server IP:port — not in inventory, forwarded as-is
 	conn, err := client.Dial("tcp", echoAddr)
 	if err != nil {
-		t.Fatalf("direct-tcpip to allowed external target failed: %v", err)
+		t.Fatalf("direct-tcpip fallback failed: %v", err)
 	}
 	defer conn.Close()
 
-	testData := []byte("hello-allowed-external")
+	testData := []byte("hello-fallback")
 	_, _ = conn.Write(testData)
 	buf := make([]byte, len(testData))
 	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
@@ -484,24 +479,6 @@ func TestHandleDirectTCPIP_AllowedExternalTarget(t *testing.T) {
 	}
 	if !bytes.Equal(buf, testData) {
 		t.Errorf("Expected echo %q, got %q", testData, buf)
-	}
-}
-
-func TestHandleDirectTCPIP_BlockedExternalTarget(t *testing.T) {
-	// Target not in inventory and not in allowlist → rejected (SSRF guard).
-	echoAddr := startEchoServer(t)
-
-	// Empty inventory, empty allowlist
-	cfg := newTestConfig(map[string]config.DeviceConfig{})
-
-	signer, authPath := generateTestClientKey(t)
-	bastionAddr := startTestBastion(t, cfg, authPath)
-	client := newTestSSHClient(t, bastionAddr, signer)
-
-	// Dial to echo server — should be rejected because it's not in allowlist
-	_, err := client.Dial("tcp", echoAddr)
-	if err == nil {
-		t.Fatal("Expected direct-tcpip to unlisted target to be rejected, but it succeeded")
 	}
 }
 

@@ -71,15 +71,6 @@ devices:
   # Maximum concurrent sessions
   maxSessions: 100
 
-  # Hosts allowed for direct TCP/IP forwarding when not in the device inventory.
-  # Used for devices with external DNS records that bypass the inventory lookup.
-  # Only exact hostname matches are permitted — IP addresses and wildcard patterns
-  # are not supported. Leaving this empty blocks all non-inventory forwarding.
-  allowedExternalTargets: []
-  # Example:
-  #   - srl1.customer.com
-  #   - mgmt.example.net
-
   # Device entries (key = device name extracted from FQDN)
   entries: {}
   # Example:

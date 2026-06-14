@@ -28,9 +28,3 @@ data:
       default_timeout: {{ .Values.devices.defaultTimeout }}
       max_sessions: {{ .Values.devices.maxSessions }}
       log_level: {{ .Values.gateway.logLevel | quote }}
-      {{- if .Values.devices.allowedExternalTargets }}
-      allowed_external_targets:
-        {{- range .Values.devices.allowedExternalTargets }}
-        - {{ . | quote }}
-        {{- end }}
-      {{- end }}

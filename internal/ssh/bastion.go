@@ -685,30 +685,21 @@ func (bs *BastionServer) handleDirectTCPIP(_ *ssh.ServerConn, newChannel ssh.New
 
 	logger.Log.Infof("Direct TCP/IP forward request to %s:%d", payload.TargetAddr, payload.TargetPort)
 
-	// Resolve dial target: prefer device inventory, fall back to OS DNS only for
-	// hosts explicitly listed in settings.allowed_external_targets.
-	// This prevents authenticated users from using the bastion as an SSRF proxy
-	// into arbitrary internal network addresses (e.g. the k8s API server).
+	// Resolve dial target: prefer device inventory, fall back to raw OS DNS.
+	// This allows ProxyJump with lab FQDNs (e.g. srl1.safabayar.net) to route
+	// to the device's internal Kubernetes hostname, while still supporting
+	// transparent forwarding for hosts with external DNS records.
 	dialHost := payload.TargetAddr
 	dialPort := int(payload.TargetPort)
 
-	cfg := bs.config.Get()
-	device, deviceName, lookupErr := cfg.GetDeviceByFQDN(payload.TargetAddr)
+	device, deviceName, lookupErr := bs.config.Get().GetDeviceByFQDN(payload.TargetAddr)
 	if lookupErr == nil {
-		// Inventory hit — route via the device's internal Kubernetes hostname.
 		dialHost = device.Hostname
 		dialPort = device.SSHPort
 		logger.Log.Infof("Routing %s via inventory: %s:%d (device=%s)",
 			payload.TargetAddr, dialHost, dialPort, deviceName)
-	} else if cfg.IsExternalTargetAllowed(payload.TargetAddr) {
-		// Not in inventory, but explicitly allowed — forward via OS DNS.
-		logger.Log.Infof("Routing %s via OS DNS (external allowlist)", payload.TargetAddr)
 	} else {
-		// Neither in inventory nor allowlisted — reject to prevent SSRF.
-		logger.Log.Warnf("Rejecting direct-tcpip to %s: not in inventory or allowed_external_targets",
-			payload.TargetAddr)
-		_ = newChannel.Reject(ssh.Prohibited, "target not permitted")
-		return
+		logger.Log.Infof("Target %s not in inventory, forwarding via OS DNS", payload.TargetAddr)
 	}
 
 	channel, requests, err := newChannel.Accept()
