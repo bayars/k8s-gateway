@@ -25,10 +25,11 @@ type DeviceConfig struct {
 
 // Settings represents global gateway settings
 type Settings struct {
-	DomainSuffix   string `yaml:"domain_suffix"`
-	DefaultTimeout int    `yaml:"default_timeout"`
-	MaxSessions    int    `yaml:"max_sessions"`
-	LogLevel       string `yaml:"log_level"`
+	DomainSuffix           string   `yaml:"domain_suffix"`
+	DefaultTimeout         int      `yaml:"default_timeout"`
+	MaxSessions            int      `yaml:"max_sessions"`
+	LogLevel               string   `yaml:"log_level"`
+	AllowedExternalTargets []string `yaml:"allowed_external_targets"`
 }
 
 // Config represents the complete configuration
@@ -147,6 +148,19 @@ func (h *ConfigHolder) Close() {
 	if h.watcher != nil {
 		_ = h.watcher.Close()
 	}
+}
+
+// IsExternalTargetAllowed reports whether host appears in the AllowedExternalTargets
+// list. Comparison is case-insensitive exact match on the hostname; port is not
+// considered here because the caller controls which port to use.
+func (c *Config) IsExternalTargetAllowed(host string) bool {
+	lhost := strings.ToLower(host)
+	for _, allowed := range c.Settings.AllowedExternalTargets {
+		if strings.ToLower(allowed) == lhost {
+			return true
+		}
+	}
+	return false
 }
 
 // GetDeviceByFQDN extracts device name from FQDN and returns its config
